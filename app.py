@@ -144,35 +144,6 @@ def calculate_planning():
     
     return planning, remaining
 
-def render_gantt_html():
-    """Génère un Gantt simple en HTML/CSS"""
-    planning, _ = calculate_planning()
-    df = pd.DataFrame([p for p in planning if p["Statut"] == "✅ Planifié"])
-    
-    if df.empty:
-        return "<p style='color: gray;'>Aucune tâche planifiée</p>"
-    
-    html = """
-    <div style="font-size: 12px; font-family: monospace;">
-    """
-    
-    for _, row in df.iterrows():
-        start = pd.to_datetime(row["Début"])
-        end = pd.to_datetime(row["Fin"])
-        width = (end - start).days * 8
-        
-        html += f"""
-        <div style="margin: 5px 0; display: flex; align-items: center;">
-            <span style="width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold;">{row['Équipe'][:20]}</span>
-            <div style="background: #2080a0; height: 20px; width: {width}px; border-radius: 3px; margin: 0 5px; color: white; display: flex; align-items: center; justify-content: center; font-size: 10px;">
-                {row['Itération'][:15]}
-            </div>
-        </div>
-        """
-    
-    html += "</div>"
-    return html
-
 # ═════════════════════════════════════════════════════════════════════
 # ONGLETS PRINCIPAUX
 # ═════════════════════════════════════════════════════════════════════
@@ -339,118 +310,39 @@ with tab3:
     with col4:
         coverage = (len(placed) / len(df_plan) * 100) if len(df_plan) > 0 else 0
         st.metric("📊 Couverture", f"{coverage:.0f}%")
-
-        
-    # Définition des projets
-    projects = [
-        {"Projet": "Email - Add File Edition to Zimbra Pro", "Priorité": 1, "Statut": "To Do"},
-        {"Projet": "Website Revamp - homepage telephony", "Priorité": 2, "Statut": "To Do"},
-        {"Projet": "QQE", "Priorité": 3, "Statut": "To Do"},
-        {"Projet": "Marketing", "Priorité": 4, "Statut": "To Do"},
-        {"Projet": "Design", "Priorité": 5, "Statut": "To Do"},
-        {"Projet": "Webmaster", "Priorité": 6, "Statut": "To Do"},
-        {"Projet": "Dev Web Front", "Priorité": 7, "Statut": "To Do"},
-        {"Projet": "Dev Web Back", "Priorité": 8, "Statut": "To Do"},
-        {"Projet": "Dev Order", "Priorité": 9, "Statut": "To Do"},
-        {"Projet": "Tracking", "Priorité": 10, "Statut": "To Do"},
-        {"Projet": "check SEO", "Priorité": 11, "Statut": "To Do"},
-        {"Projet": "QA & UAT (langue source)", "Priorité": 12, "Statut": "To Do"},
-        {"Projet": "Traduction", "Priorité": 13, "Statut": "To Do"},
-        {"Projet": "QA WW", "Priorité": 14, "Statut": "To Do"},
-    ]    # Sélection du projet
-    selected_project = st.selectbox(
-        "Sélectionner un projet",
-        options=[p["Projet"] for p in projects],
-        key="selected_project_planning"
-    )
     
     st.divider()
     
-    # Récupérer les tâches du projet sélectionné
-    project_data = next((p for p in projects if p["Projet"] == selected_project), None)
+    st.markdown("**Détail du planning**")
+    display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge", "Statut"]
+    st.dataframe(
+        df_plan[display_cols].sort_values("Priorité"),
+        use_container_width=True,
+        hide_index=True,
+        height=400
+    )
     
-    if project_data:
-        st.subheader(f"📊 Planning: {selected_project}")
-        
-        # Informations du projet
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("🎯 Priorité", project_data["Priorité"])
-        with col2:
-            st.metric("📊 Statut", project_data["Statut"])
-        
+    if not blocked.empty:
         st.divider()
-        
-        # Récupérer ou créer les tâches du projet
-        if "project_tasks" not in st.session_state:
-            st.session_state.project_tasks = {}
-        
-        if selected_project not in st.session_state.project_tasks:
-            # Initialiser avec le template
-            st.session_state.project_tasks[selected_project] = [
-                {
-                    "Tâche": task["name"],
-                    "Équipe": task["team"],
-                    "Charge": task["charge"],
-                    "Statut": "Backlog",  # Statut par défaut
-                    "Start Date": None,
-                    "End Date": None
-                }
-                for task in TASKS
-            ]        st.markdown("### 📋 Tâches du projet")
-        st.info("💡 Modifiez le statut des tâches directement dans le tableau")
-        
-        # Utiliser data_editor pou
-                
-        st.markdown("### 📋 Tâches du projet")
-            tasks_df,
-            column_config={
-                "Tâche": st.column_config.TextColumn(
-                    "Tâche",
-                    width="large",
-                    disabled=True
-                ),
-                "Équipe": st.column_config.TextColumn(
-                    "Équipe",
-                    width="medium",
-                    disabled=True
-                ),
-                "Charge": st.column_config.NumberColumn(
-                    "Charge (j)",
-                    width="small",
-                    disabled=True
-                ),
-                "Statut": st.column_config.SelectboxColumn(
-                    "Statut",
-                    options=["Backlog", "En cours", "Terminé", "Bloqué"],
-                    width="medium",
-                    required=True
-                )
-            },
+        st.warning(f"⚠️ **{len(blocked)} tâches en dépassement de capacité**")
+        st.dataframe(
+            blocked[["Priorité", "Projet", "Tâche", "Équipe", "Charge"]].sort_values("Priorité"),
             use_container_width=True,
-            hide_index=True,
-            num_rows="fixed"
-        
-        # Mettre à jour le state avec les modifications
-        st.session_state.project_tasks[selected_project] = edited_tasks.to_dict('records')
-        
-        # Statistiques des statuts
-        st.divider()
-        st.markdown("### 📊 Statistiques")
-        
-        status_counts = edited_tasks["Statut"].value_counts()
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("📝 Backlog", status_counts.get("Backlog", 0))
-        with col2:
-            st.metric("⏳ En cours", status_counts.get("En cours", 0))
-        with col3:
-            st.metric("✅ Terminé", status_counts.get("Terminé", 0))
-        with col4:
-            st.metric("❌ Bloqué", status_counts.get("Bloqué", 0))
+            hide_index=True
+        )
     
-# TAB 4: TIMELINE (Gantt simplifié)
+    st.divider()
+    
+    st.markdown("**📉 Capacité restante après planification**")
+    remaining_data = {}
+    for team in TEAMS:
+        remaining_data[team] = [remaining[(team, it["name"])] for it in ITERATIONS]
+    
+    df_remaining = pd.DataFrame(remaining_data, index=[it["name"] for it in ITERATIONS]).T
+    st.dataframe(df_remaining.style.applymap(highlight_low), use_container_width=True)
+
+# ═════════════════════════════════════════════════════════════════════
+# TAB 4: TIMELINE
 # ═════════════════════════════════════════════════════════════════════
 with tab4:
     st.subheader("📈 Timeline du planning")
@@ -460,7 +352,6 @@ with tab4:
     df_gantt = pd.DataFrame([p for p in planning if p["Statut"] == "✅ Planifié"])
     
     if not df_gantt.empty:
-        # Tableau timeline
         st.markdown("**Tâches par itération:**")
         for it in ITERATIONS:
             st.markdown(f"#### {it['name']} ({it['start']} → {it['end']})")
@@ -538,11 +429,4 @@ with tab5:
             st.info("Aucune tâche prévue dans les 7 prochains jours")
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-
-
-
-
-
-
-
+st.markdown(f"🛠 **PI Planning Tool v2.3** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
