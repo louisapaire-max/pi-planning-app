@@ -1,570 +1,476 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.figure_factory as ff
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import numpy as np
-import streamlit_shadcn_ui as ui
 from workalendar.europe import France
 
-st.set_page_config(page_title="PI Planning", layout="wide")
-st.title("PI Planning - Capacity Planning avec ETA")
+# ═════════════════════════════════════════════════════════════════════
+# CONFIG
+# ═════════════════════════════════════════════════════════════════════
+st.set_page_config(page_title="PI Planning - Capacity Tool", layout="wide")
+st.title("📊 PI Planning - Capacity Planning avec ETA")
 
+CAL_FRANCE = France()
 
-# =========================
-# ITÉRATIONS
-# =========================
-iterations = [
+# ═════════════════════════════════════════════════════════════════════
+# DONNÉES STATIQUES
+# ═════════════════════════════════════════════════════════════════════
+ITERATIONS = [
     {"name": "Itération #2", "start": "2026-01-12", "end": "2026-01-30"},
     {"name": "Itération #3", "start": "2026-02-02", "end": "2026-02-20"},
     {"name": "Itération #4", "start": "2026-02-23", "end": "2026-03-13"},
 ]
 
-# =========================
-# ÉQUIPES PAR DÉFAUT
-# =========================
-default_teams = [
-    "Product Owner",
-    "Product unit",
-    "QQE",
-    "Marketing",
-    "Design",
-    "Webmaster",
-    "Dev Web Front",
-    "Dev Web Back",
-    "Dev Order",
-    "Tracking",
-    "SEO",
-    "QA",
-    "Traduction"
+TEAMS = [
+    "Product Owner", "Product unit", "QQE", "Marketing", "Design",
+    "Webmaster", "Dev Web Front", "Dev Web Back", "Dev Order",
+    "Tracking", "SEO", "QA", "Traduction"
 ]
 
-# =========================
-# =========================
-# BACKLOG - Projets et Tâches
-# =========================
-
-# Template de tâches Catalogue Delivery (sans équipe assignée par défaut)
-catalogue_tasks_template = [
-    {"Tache": "Brief requester Delivery", "Equipe": "Product Owner", "Ordre": 1, "Charge": 1},
-    {"Tache": "Catalogue Delivery", "Equipe": "Product unit", "Ordre": 2, "Charge": 2},
-    {"Tache": "Control d'interface", "Equipe": "QQE", "Ordre": 3, "Charge": 1},
-    {"Tache": "Content", "Equipe": "Marketing", "Ordre": 4, "Charge": 2},
-    {"Tache": "Documentation Project", "Equipe": "Product Owner", "Ordre": 5, "Charge": 1},
-    {"Tache": "Kick-off Digital", "Equipe": "Product Owner", "Ordre": 6, "Charge": 0.5},
-    {"Tache": "Etude d'impact", "Equipe": "Product Owner", "Ordre": 7, "Charge": 2},
-    {"Tache": "Maquettes/Wireframe", "Equipe": "Design", "Ordre": 8, "Charge": 3},
-    {"Tache": "Redaction US / Jira", "Equipe": "Product Owner", "Ordre": 9, "Charge": 2},
-    {"Tache": "Refinement", "Equipe": "Product Owner", "Ordre": 10, "Charge": 1},
-    {"Tache": "Integration OCMS", "Equipe": "Webmaster", "Ordre": 11, "Charge": 2},
-    {"Tache": "Dev Website Front", "Equipe": "Dev Web Front", "Ordre": 12, "Charge": 5},
-    {"Tache": "Dev Website Back", "Equipe": "Dev Web Back", "Ordre": 13, "Charge": 5},
-    {"Tache": "Dev Order", "Equipe": "Dev Order", "Ordre": 14, "Charge": 3},
-    {"Tache": "Tracking", "Equipe": "Tracking", "Ordre": 15, "Charge": 2},
-    {"Tache": "check SEO", "Equipe": "SEO", "Ordre": 16, "Charge": 1},
-    {"Tache": "QA & UAT (langue source)", "Equipe": "QA", "Ordre": 17, "Charge": 3},
-    {"Tache": "Traduction", "Equipe": "Traduction", "Ordre": 18, "Charge": 2},
-    {"Tache": "QA WW", "Equipe": "QA", "Ordre": 19, "Charge": 2},
-    {"Tache": "Plan de Production", "Equipe": "Product Owner", "Ordre": 20, "Charge": 1},
-    {"Tache": "PROD", "Equipe": "Product Owner", "Ordre": 21, "Charge": 1},
-]
-# Liste des projets
-projects = [
-    {"Projet": "Email - Add File Edition to Zimbra Pro", "Priorité": 1, "Statut": "To Do"},
-    {"Projet": "Website Revamp - homepage telephony", "Priorité": 2, "Statut": "To Do"},
-    {"Projet": "VPS - Add more choice on Disk options", "Priorité": 3, "Statut": "To Do"},
-    {"Projet": "Zimbra add yearly commitment prod", "Priorité": 4, "Statut": "To Do"},
-    {"Projet": "Telco - Create new plans for Trunk product", "Priorité": 5, "Statut": "To Do"},
-    {"Projet": "Funnel order improvement - Pre-select OS & APP", "Priorité": 6, "Statut": "To Do"},
-    {"Projet": "[VPS 2026 RBX7] - Deploy RBX7 region for VPS 2026", "Priorité": 7, "Statut": "To Do"},
-    {"Projet": "lot 2 website page Phone & Headset", "Priorité": 8, "Statut": "To Do"},
-    {"Projet": "Website Revamp - numbers page", "Priorité": 9, "Statut": "To Do"},
-    {"Projet": "VOIP Offers - Update 40 Included Destinations", "Priorité": 10, "Statut": "To Do"},
-    {"Projet": "Email - Website Quick Wins - Zimbra Webmail", "Priorité": 11, "Statut": "To Do"},
-    {"Projet": "Email - Website Quick Wins - New Exchange Product pages", "Priorité": 12, "Statut": "To Do"},
-    {"Projet": "VPS - Website New pages (Resellers & Panels)", "Priorité": 13, "Statut": "To Do"},
-    {"Projet": "Email - Website Quick Wins", "Priorité": 14, "Statut": "To Do"},
-    {"Projet": "Revamp Telephony", "Priorité": 15, "Statut": "To Do"},
+TASKS = [
+    {"name": "Brief requester Delivery", "team": "Product Owner", "order": 1, "charge": 1},
+    {"name": "Catalogue Delivery", "team": "Product unit", "order": 2, "charge": 2},
+    {"name": "Control d'interface", "team": "QQE", "order": 3, "charge": 1},
+    {"name": "Content", "team": "Marketing", "order": 4, "charge": 2},
+    {"name": "Documentation Project", "team": "Product Owner", "order": 5, "charge": 1},
+    {"name": "Kick-off Digital", "team": "Product Owner", "order": 6, "charge": 0.5},
+    {"name": "Etude d'impact", "team": "Product Owner", "order": 7, "charge": 2},
+    {"name": "Maquettes/Wireframe", "team": "Design", "order": 8, "charge": 3},
+    {"name": "Redaction US / Jira", "team": "Product Owner", "order": 9, "charge": 2},
+    {"name": "Refinement", "team": "Product Owner", "order": 10, "charge": 1},
+    {"name": "Integration OCMS", "team": "Webmaster", "order": 11, "charge": 2},
+    {"name": "Dev Website Front", "team": "Dev Web Front", "order": 12, "charge": 5},
+    {"name": "Dev Website Back", "team": "Dev Web Back", "order": 13, "charge": 5},
+    {"name": "Dev Order", "team": "Dev Order", "order": 14, "charge": 3},
+    {"name": "Tracking", "team": "Tracking", "order": 15, "charge": 2},
+    {"name": "check SEO", "team": "SEO", "order": 16, "charge": 1},
+    {"name": "QA & UAT (langue source)", "team": "QA", "order": 17, "charge": 3},
+    {"name": "Traduction", "team": "Traduction", "order": 18, "charge": 2},
+    {"name": "QA WW", "team": "QA", "order": 19, "charge": 2},
+    {"name": "Plan de Production", "team": "Product Owner", "order": 20, "charge": 1},
+    {"name": "PROD", "team": "Product Owner", "order": 21, "charge": 1}
 ]
 
+PROJECTS = [
+    {"name": "Email - Add File Edition to Zimbra Pro", "priority": 1, "status": "To Do"},
+    {"name": "Website Revamp - homepage telephony", "priority": 2, "status": "To Do"},
+    {"name": "VPS - Add more choice on Disk options", "priority": 3, "status": "To Do"},
+    {"name": "Zimbra add yearly commitment prod", "priority": 4, "status": "To Do"},
+    {"name": "Telco - Create new plans for Trunk product", "priority": 5, "status": "To Do"},
+    {"name": "Funnel order improvement - Pre-select OS & APP", "priority": 6, "status": "To Do"},
+    {"name": "[VPS 2026 RBX7] - Deploy RBX7 region for VPS 2026", "priority": 7, "status": "To Do"},
+    {"name": "lot 2 website page Phone & Headset", "priority": 8, "status": "To Do"},
+    {"name": "Website Revamp - numbers page", "priority": 9, "status": "To Do"},
+    {"name": "VOIP Offers - Update 40 Included Destinations", "priority": 10, "status": "To Do"},
+    {"name": "Email - Website Quick Wins - Zimbra Webmail", "priority": 11, "status": "To Do"},
+    {"name": "Email - Website Quick Wins - New Exchange Product pages", "priority": 12, "status": "To Do"},
+    {"name": "VPS - Website New pages (Resellers & Panels)", "priority": 13, "status": "To Do"},
+    {"name": "Email - Website Quick Wins", "priority": 14, "status": "To Do"},
+    {"name": "Revamp Telephony", "priority": 15, "status": "To Do"},
+]
 
-# Extraire la liste des noms de projets
-projects_names = [p["Projet"] for p in projects]
-
-# =========================
-# ONGLET 1 - SIZING PROJET/ÉQUIPE
-# =========================
-
-st.header("📊 PI Planning - Sizing des Projets")
-
-tab1, tab2, tab3, tab4 = st.tabs(["Sizing Projets", "Affectation Tâches", "Gantt", "Projet"])
-with tab1:
-    st.subheader("Matrice de Sizing: Projets x Équipes")
-    st.markdown("Renseignez la charge de travail (en jours) pour chaque combinaison projet/équipe")
-    
-    # Initialiser le session state pour les sizings
-    if "project_sizing" not in st.session_state:
-        st.session_state.project_sizing = {}
-        for project in projects_names:
-            for team in default_teams:
-                key = f"{project}_{team}"
-                st.session_state.project_sizing[key] = 0.0
-    
-    # Créer un DataFrame pour afficher la matrice
-    sizing_data = {}
-    for team in default_teams:
-        sizing_data[team] = []
-        for project in projects_names:
-            key = f"{project}_{team}"
-            sizing_data[team].append(st.session_state.project_sizing.get(key, 0.0))
-    
-    df_sizing = pd.DataFrame(sizing_data, index=projects_names)
-    
-    # Afficher le DataFrame éditable
-    edited_df = st.data_editor(
-        df_sizing,
-        use_container_width=True,
-        num_rows="fixed",
-        column_config={
-            team: st.column_config.NumberColumn(
-                team,
-                min_value=0,
-                max_value=100,
-                step=0.5,
-                format="%.1f j"
-            ) for team in default_teams
-        }
-    )
-    
-    # Mettre à jour le session state avec les valeurs éditées
-    for team in default_teams:
-        for idx, project in enumerate(projects_names):
-            key = f"{project}_{team}"
-            st.session_state.project_sizing[key] = edited_df[team].iloc[idx]
-    
-    # Statistiques rapides
-    st.subheader("📊 Statistiques")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        total_charge = edited_df.sum().sum()
-        st.metric("Charge totale", f"{total_charge:.1f} jours")
-    
-    with col2:
-        charge_par_equipe = edited_df.sum(axis=0)
-        equipe_max = charge_par_equipe.idxmax()
-        st.metric("Équipe la plus chargée", equipe_max, f"{charge_par_equipe[equipe_max]:.1f} j")
-    
-    with col3:
-        charge_par_projet = edited_df.sum(axis=1)
-        projet_max = charge_par_projet.idxmax()
-        st.metric("Projet le plus gros", projet_max[:30] + "...", f"{charge_par_projet[projet_max]:.1f} j")
-
-with tab2:
-    
-    st.subheader("Planning et Diagramme de Gantt")
-    st.info("🚧 Section en cours de développement - Affichera le planning détaillé et le Gantt")
-
-
-# SESSION STATE pour les affectations tâche-équipe
-if "task_assignments" not in st.session_state:
-    st.session_state.task_assignments = {}
-    # Initialiser avec valeurs par défaut
-    for p in projects:
-        for task in catalogue_tasks_template:
-            key = (p["Projet"], task["Tâche"])
-            st.session_state.task_assignments[key] =task["Équipe"]  # Équipe du template
-# =========================
-# SESSION STATE – CAPACITÉS
-# =========================
+# ═════════════════════════════════════════════════════════════════════
+# SESSION STATE INITIALIZATION
+# ═════════════════════════════════════════════════════════════════════
 if "capacity" not in st.session_state:
     st.session_state.capacity = {}
-    for team in default_teams:
-        for it in iterations:
-            st.session_state.capacity[(team, it["name"])] = 10.0  # Capacité par défaut
+    for team in TEAMS:
+        for it in ITERATIONS:
+            st.session_state.capacity[(team, it["name"])] = 10.0
 
-# =========================
-# SESSION STATE – CONGÉS & RUN DAYS
-# =========================
 if "leaves" not in st.session_state:
     st.session_state.leaves = {}
-    for team in default_teams:
-        for it in iterations:
+    for team in TEAMS:
+        for it in ITERATIONS:
             st.session_state.leaves[(team, it["name"])] = 0.0
 
 if "run_days" not in st.session_state:
     st.session_state.run_days = {}
-    for team in default_teams:
-        for it in iterations:
+    for team in TEAMS:
+        for it in ITERATIONS:
             st.session_state.run_days[(team, it["name"])] = 0.0
 
-# =========================
-# CALCUL CAPACITÉ NETTE
-# =========================
-def calculate_net_capacity():
-    """Calcule la capacité nette = capacité - congés - run days"""
-    net_capacity = {}
-    for team in default_teams:
-        for it in iterations:
-            key = (team, it["name"])
-            brute = st.session_state.capacity.get(key, 0)
-            leaves = st.session_state.leaves.get(key, 0)
-            run = st.session_state.run_days.get(key, 0)
-            net_capacity[key] = max(0, brute - leaves - run)
-    return net_capacity
+# ═════════════════════════════════════════════════════════════════════
+# FONCTIONS UTILITAIRES
+# ═════════════════════════════════════════════════════════════════════
 
-# =========================
-# CALCUL DES ETA
-# =========================
-def calculate_eta():
-    """Calcule l'ETA avec gestion des tâches détaillées par projet"""
-    net_capacity = calculate_net_capacity()
-    remaining_capacity = net_capacity.copy()
+def get_net_capacity(team: str, iteration: dict) -> float:
+    """Capacité nette = brute - congés - run days"""
+    key = (team, iteration["name"])
+    brute = st.session_state.capacity.get(key, 0)
+    leaves = st.session_state.leaves.get(key, 0)
+    run = st.session_state.run_days.get(key, 0)
+    return max(0, brute - leaves - run)
+
+def calculate_planning():
+    """Calcul l'ETA pour toutes les tâches"""
+    remaining = {}
+    for team in TEAMS:
+        for it in ITERATIONS:
+            remaining[(team, it["name"])] = get_net_capacity(team, it)
+    
     planning = []
     
-    for p in sorted(projects, key=lambda x: x["Priorité"]):
-        # Pour chaque projet, traiter toutes ses tâches dans l'ordre
-        for task in sorted(catalogue_tasks_template, key=lambda t: t["Ordre"]):
-            key_assignment = (p["Projet"], task["Tâche"])
-            assigned_team = st.session_state.task_assignments.get(key_assignment, "Product Owner")
-            
+    for project in sorted(PROJECTS, key=lambda x: x["priority"]):
+        for task in sorted(TASKS, key=lambda t: t["order"]):
             placed = False
-            for it in iterations:
-                key_capacity = (assigned_team, it["name"])
-                capacity_available = remaining_capacity.get(key_capacity, 0)
-                
-                if capacity_available >= task["Charge"]:
-                    remaining_capacity[key_capacity] -= task["Charge"]
+            
+            for it in ITERATIONS:
+                key = (task["team"], it["name"])
+                if (remaining.get(key, 0) >= task["charge"]):
+                    remaining[key] -= task["charge"]
                     planning.append({
-                        "Projet": p["Projet"],
-                        "Tâche": task["Tâche"],
-                        "Équipe": assigned_team,
+                        "Priorité": project["priority"],
+                        "Projet": project["name"],
+                        "Tâche": task["name"],
+                        "Équipe": task["team"],
+                        "Itération": it["name"],
                         "Début": it["start"],
                         "Fin": it["end"],
-                        "Itération": it["name"],
-                        "ETA": it["end"],
-                        "Statut": p["Statut"],
-                        "Priorité": p["Priorité"],
-                        "Ordre": task["Ordre"]
+                        "Charge": task["charge"],
+                        "Statut": "✅ Planifié"
                     })
                     placed = True
                     break
             
             if not placed:
-                # Tâche hors capacité
                 planning.append({
-                    "Projet": p["Projet"],
-                    "Tâche": task["Tâche"],
-                    "Équipe": assigned_team,
+                    "Priorité": project["priority"],
+                    "Projet": project["name"],
+                    "Tâche": task["name"],
+                    "Équipe": task["team"],
+                    "Itération": "⚠️ Dépassement",
                     "Début": None,
                     "Fin": None,
-                    "Itération": "Hors capacité",
-                    "ETA": "Dépassement",
-                    "Statut": "Bloqué",
-                    "Priorité": p["Priorité"],
-                    "Ordre": task["Ordre"]
+                    "Charge": task["charge"],
+                    "Statut": "❌ Bloqué"
                 })
     
-    return planning, remaining_capacity
-# =========================
-# ONGLETS
-# =========================
-# =========================================================
-# ONGLET 1 – CAPACITÉS
-# =========================================================
-    st.subheader("Capacité par équipe et par itération (jours)")
-    st.info("💡 Saisir la capacité brute de chaque équipe par itération")
+    return planning, remaining
+
+def format_date(date_str):
+    """Format date string"""
+    if not date_str:
+        return ""
+    return pd.to_datetime(date_str).strftime("%d/%m/%Y")
+
+# ═════════════════════════════════════════════════════════════════════
+# ONGLETS PRINCIPAUX
+# ═════════════════════════════════════════════════════════════════════
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Capacités",
+    "🏖️ Congés & Run",
+    "📋 Planning & ETA",
+    "📈 Gantt",
+    "✅ En cours"
+])
+
+# ═════════════════════════════════════════════════════════════════════
+# TAB 1: CAPACITÉS
+# ═════════════════════════════════════════════════════════════════════
+with tab1:
+    st.subheader("📊 Capacité brute par équipe")
+    st.markdown("Saisissez la capacité totale disponible (en jours) pour chaque équipe par itération")
     
-    rows = []
-    for team in default_teams:
-        row = {"Équipe": team}
-        cols = st.columns(len(iterations) + 1)
-        cols[0].markdown(f"**{team}**")
-        
-        for idx, it in enumerate(iterations):
+    capacity_data = {}
+    for team in TEAMS:
+        capacity_data[team] = []
+        for it in ITERATIONS:
             key = (team, it["name"])
-            with cols[idx + 1]:
-                value = st.number_input(
-                    it["name"],
-                    min_value=0.0,
-                    step=0.5,
-                    value=st.session_state.capacity[key],
-                    key=f"cap_{team}_{it['name']}",
-                    label_visibility="collapsed"
-                )
-                st.session_state.capacity[key] = value
-                row[it["name"]] = value
-        rows.append(row)
+            capacity_data[team].append(st.session_state.capacity[key])
+    
+    df_cap = pd.DataFrame(capacity_data, index=[it["name"] for it in ITERATIONS]).T
+    
+    edited_cap = st.data_editor(
+        df_cap,
+        use_container_width=True,
+        column_config={
+            it["name"]: st.column_config.NumberColumn(
+                it["name"], min_value=0, max_value=100, step=0.5, format="%.1f j"
+            ) for it in ITERATIONS
+        }
+    )
+    
+    # Mettre à jour session state
+    for idx, team in enumerate(TEAMS):
+        for jdx, it in enumerate(ITERATIONS):
+            key = (team, it["name"])
+            st.session_state.capacity[key] = edited_cap.iloc[idx, jdx]
     
     st.divider()
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    
+    # KPIs
+    col1, col2, col3, col4 = st.columns(4)
+    total_cap = edited_cap.sum().sum()
+    avg_per_team = edited_cap.mean(axis=1).mean()
+    max_team = edited_cap.sum(axis=1).idxmax()
+    min_team = edited_cap.sum(axis=1).idxmin()
+    
+    with col1:
+        st.metric("📦 Capacité totale", f"{total_cap:.0f}j")
+    with col2:
+        st.metric("👥 Moyenne/équipe", f"{avg_per_team:.1f}j")
+    with col3:
+        st.metric("🔥 Équipe max", f"{max_team[:20]}", f"{edited_cap.loc[max_team].sum():.1f}j")
+    with col4:
+        st.metric("📉 Équipe min", f"{min_team[:20]}", f"{edited_cap.loc[min_team].sum():.1f}j")
 
-# =========================================================
-# ONGLET 2 – CONGÉS & RUN DAYS
-# =========================================================
-    st.subheader("Congés et jours de run par équipe et itération")
-    st.info("💡 Déclarer les congés et jours de run pour chaque équipe")
+# ═════════════════════════════════════════════════════════════════════
+# TAB 2: CONGÉS & RUN DAYS
+# ═════════════════════════════════════════════════════════════════════
+with tab2:
+    st.subheader("🏖️ Congés et Run Days")
     
     col_leave, col_run = st.columns(2)
     
     with col_leave:
-        st.markdown("### 🏖️ Congés (jours)")
-        leave_rows = []
-        for team in default_teams:
-            row = {"Équipe": team}
-            for it in iterations:
+        st.markdown("#### Congés (jours)")
+        leave_data = {}
+        for team in TEAMS:
+            leave_data[team] = []
+            for it in ITERATIONS:
                 key = (team, it["name"])
-                row[it["name"]] = st.number_input(
-                    f"{team} – {it['name']} congés",
-                    min_value=0.0,
-                    step=0.5,
-                    value=st.session_state.leaves[key],
-                    key=f"leave_{team}_{it['name']}"
-                )
-                st.session_state.leaves[key] = row[it["name"]]
-            leave_rows.append(row)
-        st.dataframe(pd.DataFrame(leave_rows), use_container_width=True, hide_index=True)
+                leave_data[team].append(st.session_state.leaves[key])
+        
+        df_leave = pd.DataFrame(leave_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_leave = st.data_editor(
+            df_leave,
+            use_container_width=True,
+            column_config={
+                it["name"]: st.column_config.NumberColumn(
+                    it["name"], min_value=0, max_value=20, step=0.5, format="%.1f j"
+                ) for it in ITERATIONS
+            }
+        )
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                key = (team, it["name"])
+                st.session_state.leaves[key] = edited_leave.iloc[idx, jdx]
     
     with col_run:
-        st.markdown("### 🔧 Run days (jours)")
-        run_rows = []
-        for team in default_teams:
-            row = {"Équipe": team}
-            for it in iterations:
+        st.markdown("#### Run Days (jours)")
+        run_data = {}
+        for team in TEAMS:
+            run_data[team] = []
+            for it in ITERATIONS:
                 key = (team, it["name"])
-                row[it["name"]] = st.number_input(
-                    f"{team} – {it['name']} run",
-                    min_value=0.0,
-                    step=0.5,
-                    value=st.session_state.run_days[key],
-                    key=f"run_{team}_{it['name']}"
-                )
-                st.session_state.run_days[key] = row[it["name"]]
-            run_rows.append(row)
-        st.dataframe(pd.DataFrame(run_rows), use_container_width=True, hide_index=True)
-    
-    # Afficher la capacité nette
-    st.divider()
-    st.markdown("### 📊 Capacité nette (Capacité - Congés - Run)")
-    net_capacity = calculate_net_capacity()
-    net_rows = []
-    for team in default_teams:
-        row = {"Équipe": team}
-        for it in iterations:
-            key = (team, it["name"])
-            row[it["name"]] = net_capacity[key]
-        net_rows.append(row)
-    st.dataframe(pd.DataFrame(net_rows), use_container_width=True, hide_index=True)
-
-# =========================================================
-# ONGLET 3 – GANTT & ETA
-# =========================================================
-    st.subheader("Gantt PI Planning avec ETA")
-    
-    planning, remaining = calculate_eta()
-    
-    if planning:
-        df_gantt = pd.DataFrame(planning)
+                run_data[team].append(st.session_state.run_days[key])
         
-        # Afficher tableau avec ETA
-        st.markdown("### 📋 Planning des projets avec ETA")
-        display_cols = ["Priorité", "Projet", "Équipe", "Itération", "ETA", "Statut"]
-        st.dataframe(df_gantt[display_cols].sort_values("Priorité"), use_container_width=True, hide_index=True)
-        
-        # Gantt chart
-        st.markdown("### 📊 Visualisation Gantt")
-        fig = px.timeline(
-            df_gantt,
-            x_start="Début",
-            x_end="Fin",
-            y="Équipe",
-            color="Projet",
-            hover_data=["Itération", "ETA", "Priorité"]
+        df_run = pd.DataFrame(run_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_run = st.data_editor(
+            df_run,
+            use_container_width=True,
+            column_config={
+                it["name"]: st.column_config.NumberColumn(
+                    it["name"], min_value=0, max_value=20, step=0.5, format="%.1f j"
+                ) for it in ITERATIONS
+            }
         )
-        fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig, use_container_width=True)
         
-        # Capacité restante
-        st.markdown("### 📉 Capacité restante après planification")
-        remaining_rows = []
-        for team in default_teams:
-            row = {"Équipe": team}
-            for it in iterations:
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
                 key = (team, it["name"])
-                row[it["name"]] = remaining[key]
-            remaining_rows.append(row)
-        st.dataframe(pd.DataFrame(remaining_rows), use_container_width=True, hide_index=True)
-    else:
-        st.warning("⚠️ Aucun projet planifié. Vérifie les capacités.")
-
-# =========================================================
-# ONGLET 4 – TÂCHES EN COURS
-# =========================================================
-    st.subheader("Suivi des tâches en cours")
-    st.info("💡 Basé sur la date du jour et les ETA calculés")
+                st.session_state.run_days[key] = edited_run.iloc[idx, jdx]
     
-    planning, _ = calculate_eta()
+    st.divider()
     
-    if planning:
-        df_planning = pd.DataFrame(planning)
-        today = pd.Timestamp.now().normalize()
-        
-        # Filtrer les tâches en cours
-        # Filtrer les tâches en cours (ignorer les erreurs de conversion de date)
-        df_planning["Début_dt"] = pd.to_datetime(df_planning["Début"], errors='coerce').dt.date
-        df_planning["ETA_dt"] = pd.to_datetime(df_planning["ETA"], errors='coerce').dt.date        
-        # Filtrer uniquement les tâches avec des dates valides
-        in_progress = df_planning[
-            (df_planning["Début_dt"].notna()) &
-            (df_planning["ETA_dt"].notna()) &
-            (df_planning["Début_dt"] <= today) & 
-            (df_planning["ETA_dt"] >= today)
-        ]        
-        if not in_progress.empty:
-            st.markdown(f"### ✅ Tâches actives au {today.strftime('%d/%m/%Y')}")
-            display_cols = ["Priorité", "Projet", "Équipe", "Itération", "Début", "ETA", "Statut"]
-            st.dataframe(in_progress[display_cols].sort_values("Priorité"), use_container_width=True, hide_index=True)
-            
-            # Stats
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Tâches en cours", len(in_progress))
-            with col2:
-                st.metric("Équipes actives", in_progress["Équipe"].nunique())
-            with col3:
-                st.metric("Itérations actives", in_progress["Itération"].nunique())
-        else:
-            st.info("Aucune tâche en cours pour la date du jour.")
-    else:
-        st.warning("Aucun planning disponible.")
+    st.markdown("#### 📊 Capacité nette (après déductions)")
+    net_data = {}
+    for team in TEAMS:
+        net_data[team] = [get_net_capacity(team, it) for it in ITERATIONS]
+    
+    df_net = pd.DataFrame(net_data, index=[it["name"] for it in ITERATIONS]).T
+    
+    def highlight_low(val):
+        if val < 2:
+            return "background-color: #ffcccc"
+        elif val < 5:
+            return "background-color: #ffffcc"
+        return ""
+    
+    st.dataframe(df_net.style.applymap(highlight_low), use_container_width=True)
+    
+    low_teams = df_net[(df_net < 5).any(axis=1)].index.tolist()
+    if low_teams:
+        st.warning(f"⚠️ **Équipes en capacité faible:** {', '.join(low_teams[:5])}")
 
+# ═════════════════════════════════════════════════════════════════════
+# TAB 3: PLANNING & ETA
+# ═════════════════════════════════════════════════════════════════════
 with tab3:
-    st.subheader("📅 Diagramme de Gantt - Vue Itérations")
+    st.subheader("📋 Planning détaillé avec ETA")
     
-    # Créer le calendrier français pour les jours fériés
-    cal = France()
+    planning, remaining = calculate_planning()
+    df_plan = pd.DataFrame(planning)
     
-    # Calculer la période totale (toutes les itérations)
-    all_dates = []
-    for iteration in iterations:
-        start = pd.to_datetime(iteration["start"])
-        end = pd.to_datetime(iteration["end"])
-        all_dates.extend([start, end])
+    placed = df_plan[df_plan["Statut"] == "✅ Planifié"]
+    blocked = df_plan[df_plan["Statut"] == "❌ Bloqué"]
     
-    period_start = min(all_dates)
-    period_end = max(all_dates)
+    col1, col2, col3, col4 = st.columns(4)
     
-    # Générer tous les jours ouvrables (sans weekends)
-    all_days = pd.date_range(period_start, period_end, freq='D')
-    working_days = [d for d in all_days if d.weekday() < 5]  # Lun-Ven uniquement
+    with col1:
+        st.metric("✅ Tâches planifiées", len(placed))
+    with col2:
+        st.metric("❌ Tâches bloquées", len(blocked))
+    with col3:
+        st.metric("📦 Charge planifiée", f"{placed['Charge'].sum():.1f}j")
+    with col4:
+        coverage = (len(placed) / len(df_plan) * 100) if len(df_plan) > 0 else 0
+        st.metric("📊 Couverture", f"{coverage:.0f}%")
     
-    # Identifier les jours fériés français
-    holidays = []
-    for year in range(period_start.year, period_end.year + 1):
-        year_holidays = cal.holidays(year)
-        for holiday_date, holiday_name in year_holidays:
-            if period_start <= pd.Timestamp(holiday_date) <= period_end:
-                holidays.append(pd.Timestamp(holiday_date))
+    st.divider()
     
-    # Créer le diagramme de Gantt avec plotly
-    import plotly.figure_factory as ff
-    import plotly.graph_objects as go
-    
-    # Préparer les données du Gantt (itérations)
-    gantt_data = []
-    for iteration in iterations:
-        gantt_data.append(dict(
-            Task=iteration["name"],
-            Start=iteration["start"],
-            Finish=iteration["end"],
-            Resource="Itération"
-        ))
-    
-    # Créer le Gantt
-    fig = ff.create_gantt(
-        gantt_data,
-        colors={'Itération': 'rgb(46, 137, 205)'},
-        index_col='Resource',
-        show_colorbar=True,
-        group_tasks=True,
-        showgrid_x=True,
-        showgrid_y=True
+    st.markdown("**Détail du planning**")
+    display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge", "Statut"]
+    st.dataframe(
+        df_plan[display_cols].sort_values("Priorité"),
+        use_container_width=True,
+        hide_index=True,
+        height=400
     )
     
-    # Ajouter des marqueurs pour les jours fériés
-    for holiday in holidays:
-        fig.add_vline(
-            x=holiday,
-            line_width=2,
-            line_dash="dash",
-            line_color="red",
-            opacity=0.3
+    if not blocked.empty:
+        st.divider()
+        st.warning(f"⚠️ **{len(blocked)} tâches en dépassement de capacité**")
+        st.dataframe(
+            blocked[["Priorité", "Projet", "Tâche", "Équipe", "Charge"]].sort_values("Priorité"),
+            use_container_width=True,
+            hide_index=True
         )
     
-    # Ajouter des marqueurs pour les weekends
-    for day in all_days:
-        if day.weekday() >= 5:  # Samedi ou Dimanche
+    st.divider()
+    
+    st.markdown("**📉 Capacité restante après planification**")
+    remaining_data = {}
+    for team in TEAMS:
+        remaining_data[team] = [remaining[(team, it["name"])] for it in ITERATIONS]
+    
+    df_remaining = pd.DataFrame(remaining_data, index=[it["name"] for it in ITERATIONS]).T
+    st.dataframe(df_remaining.style.applymap(highlight_low), use_container_width=True)
+
+# ═════════════════════════════════════════════════════════════════════
+# TAB 4: GANTT
+# ═════════════════════════════════════════════════════════════════════
+with tab4:
+    st.subheader("📈 Diagramme de Gantt")
+    
+    gantt_data = []
+    for it in ITERATIONS:
+        gantt_data.append({
+            "Task": it["name"],
+            "Start": it["start"],
+            "Finish": it["end"],
+            "Resource": "Itération"
+        })
+    
+    fig = ff.create_gantt(
+        gantt_data,
+        colors={"Itération": "rgb(32, 128, 160)"},
+        showgrid_x=True,
+        group_tasks=True,
+        height=300
+    )
+    
+    period_start = pd.to_datetime(ITERATIONS[0]["start"])
+    period_end = pd.to_datetime(ITERATIONS[-1]["end"])
+    
+    for day in pd.date_range(period_start, period_end, freq='D'):
+        if day.weekday() >= 5:
             fig.add_vrect(
-                x0=day,
-                x1=day + pd.Timedelta(days=1),
-                fillcolor="gray",
-                opacity=0.1,
-                layer="below",
-                line_width=0
+                x0=day, x1=day + pd.Timedelta(days=1),
+                fillcolor="gray", opacity=0.1, layer="below", line_width=0
             )
     
-    # Personnaliser le layout
+    for year in range(period_start.year, period_end.year + 1):
+        for holiday_date, _ in CAL_FRANCE.holidays(year):
+            holiday = pd.Timestamp(holiday_date)
+            if period_start <= holiday <= period_end:
+                fig.add_vline(x=holiday, line_width=2, line_dash="dash", line_color="red", opacity=0.4)
+    
     fig.update_layout(
-        title="Planning des Itérations (Jours ouvrables uniquement)",
+        title="Planning des Itérations",
         xaxis_title="Date",
-        yaxis_title="Itérations",
-        height=400,
-        xaxis=dict(
-            tickformat="%d/%m",
-            dtick=86400000.0,  # 1 jour en millisecondes
-            tickangle=-45
-        )
+        height=350,
+        xaxis=dict(tickformat="%d/%m", tickangle=-45),
+        hovermode="closest"
     )
     
     st.plotly_chart(fig, use_container_width=True)
     
-    # Légende
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("🟦 **Bleu**: Itérations")
     with col2:
-        st.markdown("🔴 **Rouge (pointillé)**: Jours fériés")
+        st.markdown("🔴 **Ligne rouge**: Jours fériés FR")
     with col3:
         st.markdown("⬜ **Gris**: Weekends")
+
+# ═════════════════════════════════════════════════════════════════════
+# TAB 5: EN COURS
+# ═════════════════════════════════════════════════════════════════════
+with tab5:
+    st.subheader("✅ Suivi des tâches actives")
     
-    # Afficher la liste des jours fériés dans la période
-    if holidays:
-        st.markdown("---")
-        st.subheader("🇯🇷 Jours fériés français sur la période")
-        holidays_info = []
-        for year in range(period_start.year, period_end.year + 1):
-            year_holidays = cal.holidays(year)
-            for holiday_date, holiday_name in year_holidays:
-                if period_start <= pd.Timestamp(holiday_date) <= period_end:
-                    holidays_info.append({
-                        "Date": holiday_date.strftime("%d/%m/%Y"),
-                        "Jour": holiday_name
-                    })
+    planning, _ = calculate_planning()
+    
+    if planning:
+        df_plan = pd.DataFrame(planning)
+        today = pd.Timestamp.now().normalize()
         
-        if holidays_info:
-            st.dataframe(pd.DataFrame(holidays_info), use_container_width=True, hide_index=True)
+        df_plan["start_dt"] = pd.to_datetime(df_plan["Début"], errors='coerce')
+        df_plan["end_dt"] = pd.to_datetime(df_plan["Fin"], errors='coerce')
+        
+        active = df_plan[
+            (df_plan["start_dt"].notna()) &
+            (df_plan["end_dt"].notna()) &
+            (df_plan["start_dt"] <= today) &
+            (df_plan["end_dt"] >= today)
+        ]
+        
+        upcoming = df_plan[
+            (df_plan["start_dt"] > today) &
+            (df_plan["start_dt"] <= today + pd.Timedelta(days=7))
+        ]
+        
+        if not active.empty:
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("⏳ Tâches actives", len(active))
+            with col2:
+                st.metric("👥 Équipes", active["Équipe"].nunique())
+            with col3:
+                st.metric("🎯 Projets", active["Projet"].nunique())
+            with col4:
+                st.metric("📦 Charge/jour", f"{active['Charge'].sum():.1f}j")
+            
+            st.divider()
+            st.markdown("**Tâches actives aujourd'hui**")
+            display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Charge"]
+            st.dataframe(
+                active[display_cols].sort_values("Priorité"),
+                use_container_width=True,
+                hide_index=True,
+                height=300
+            )
+        else:
+            st.info("ℹ️ Aucune tâche active pour aujourd'hui")
+        
+        st.divider()
+        
+        if not upcoming.empty:
+            st.markdown("### 🔜 Prochaines tâches (7 jours)")
+            st.dataframe(
+                upcoming[["Début", "Projet", "Tâche", "Équipe", "Charge"]].sort_values("Début"),
+                use_container_width=True,
+                hide_index=True,
+                height=300
+            )
+        else:
+            st.info("Aucune tâche prévue dans les 7 prochains jours")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+st.divider()
+st.markdown(f"🛠 **PI Planning Tool v2.0** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
