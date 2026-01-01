@@ -80,6 +80,85 @@ projects = [
     {"Projet": "Revamp Telephony", "Priorité": 15, "Statut": "To Do"},
 ]
 
+
+# Extraire la liste des noms de projets
+projects_names = [p["Projet"] for p in projects]
+
+# =========================
+# ONGLET 1 - SIZING PROJET/ÉQUIPE
+# =========================
+
+st.header("📊 PI Planning - Sizing des Projets")
+
+tab1, tab2 = st.tabs(["Sizing Projets", "Planning & Gantt"])
+
+with tab1:
+    st.subheader("Matrice de Sizing: Projets x Équipes")
+    st.markdown("Renseignez la charge de travail (en jours) pour chaque combinaison projet/équipe")
+    
+    # Initialiser le session state pour les sizings
+    if "project_sizing" not in st.session_state:
+        st.session_state.project_sizing = {}
+        for project in projects_names:
+            for team in default_teams:
+                key = f"{project}_{team}"
+                st.session_state.project_sizing[key] = 0.0
+    
+    # Créer un DataFrame pour afficher la matrice
+    sizing_data = {}
+    for team in default_teams:
+        sizing_data[team] = []
+        for project in projects_names:
+            key = f"{project}_{team}"
+            sizing_data[team].append(st.session_state.project_sizing.get(key, 0.0))
+    
+    df_sizing = pd.DataFrame(sizing_data, index=projects_names)
+    
+    # Afficher le DataFrame éditable
+    edited_df = st.data_editor(
+        df_sizing,
+        use_container_width=True,
+        num_rows="fixed",
+        column_config={
+            team: st.column_config.NumberColumn(
+                team,
+                min_value=0,
+                max_value=100,
+                step=0.5,
+                format="%.1f j"
+            ) for team in default_teams
+        }
+    )
+    
+    # Mettre à jour le session state avec les valeurs éditées
+    for team in default_teams:
+        for idx, project in enumerate(projects_names):
+            key = f"{project}_{team}"
+            st.session_state.project_sizing[key] = edited_df[team].iloc[idx]
+    
+    # Statistiques rapides
+    st.subheader("📊 Statistiques")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        total_charge = edited_df.sum().sum()
+        st.metric("Charge totale", f"{total_charge:.1f} jours")
+    
+    with col2:
+        charge_par_equipe = edited_df.sum(axis=0)
+        equipe_max = charge_par_equipe.idxmax()
+        st.metric("Équipe la plus chargée", equipe_max, f"{charge_par_equipe[equipe_max]:.1f} j")
+    
+    with col3:
+        charge_par_projet = edited_df.sum(axis=1)
+        projet_max = charge_par_projet.idxmax()
+        st.metric("Projet le plus gros", projet_max[:30] + "...", f"{charge_par_projet[projet_max]:.1f} j")
+
+with tab2:
+    st.subheader("Planning et Diagramme de Gantt")
+    st.info("🚧 Section en cours de développement - Affichera le planning détaillé et le Gantt")
+
+
 # SESSION STATE pour les affectations tâche-équipe
 if "task_assignments" not in st.session_state:
     st.session_state.task_assignments = {}
@@ -356,6 +435,7 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
 
 
