@@ -1,165 +1,120 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
-# =============================
-# CONFIG
-# =============================
 st.set_page_config(page_title="PI Planning", layout="wide")
-st.title("PI Planning – Outil interactif")
+st.title("PI Planning")
 
-# =============================
-# SPRINTS / ITÉRATIONS
-# =============================
-sprints = [
+# =========================
+# ITÉRATIONS
+# =========================
+iterations = [
     {"name": "Itération #1", "start": "2025-12-22", "end": "2026-01-09"},
     {"name": "Itération #2", "start": "2026-01-12", "end": "2026-01-30"},
     {"name": "Itération #3", "start": "2026-02-02", "end": "2026-02-20"},
     {"name": "Itération #4", "start": "2026-02-23", "end": "2026-03-13"},
-    {"name": "Itération #5", "start": "2026-03-16", "end": "2026-03-20"},
 ]
 
-# =============================
-# SESSION STATE
-# =============================
-if "teams" not in st.session_state:
-    st.session_state.teams = {}
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+# =========================
+# ÉQUIPES PAR DÉFAUT
+# =========================
+default_teams = [
+    "Product Owner",
+    "Marketing",
+    "Product unit",
+    "Dev Web Front",
+    "Dev Web Back",
+    "Dev Order",
+    "Webmaster",
+    "SEO",
+    "Tracking",
+    "QA"
+]
 
-# =============================
-# SIDEBAR – GESTION DES ÉQUIPES
-# =============================
-st.sidebar.header("Équipes")
+# =========================
+# BACKLOG (tes projets)
+# =========================
+projects = [
+    {"Projet": "Email - Add File Edition to Zimbra Pro", "Équipe": "Product unit", "Charge": 6, "Priorité": 1},
+    {"Projet": "Website Revamp - homepage telephony", "Équipe": "Dev Web Front", "Charge": 8, "Priorité": 2},
+    {"Projet": "VPS - Add more choice on Disk options", "Équipe": "Dev Web Back", "Charge": 5, "Priorité": 3},
+    {"Projet": "Zimbra add yearly commitment prod", "Équipe": "Product unit", "Charge": 4, "Priorité": 4},
+    {"Projet": "Telco - Create new plans for Trunk product", "Équipe": "Dev Order", "Charge": 7, "Priorité": 5},
+    {"Projet": "Funnel order improvement - Pre-select OS APP", "Équipe": "Dev Web Front", "Charge": 6, "Priorité": 6},
+]
 
-new_team = st.sidebar.text_input("Nouvelle équipe")
-if st.sidebar.button("Ajouter l'équipe"):
-    if new_team and new_team not in st.session_state.teams:
-        st.session_state.teams[new_team] = []
+# =========================
+# SESSION STATE – CAPACITÉS
+# =========================
+if "capacity" not in st.session_state:
+    st.session_state.capacity = {}
+    for team in default_teams:
+        for it in iterations:
+            st.session_state.capacity[(team, it["name"])] = 0.0
 
-# =============================
-# SIDEBAR – AJOUT DÉVELOPPEUR
-# =============================
-st.sidebar.header("Ajouter un développeur")
+# =========================
+# ONGLETS
+# =========================
+tab1, tab2 = st.tabs(["Capacités équipes", "Gantt PI Planning"])
 
-if st.session_state.teams:
-    team_selected = st.sidebar.selectbox(
-        "Équipe",
-        list(st.session_state.teams.keys())
-    )
+# =========================================================
+# ONGLET 1 – CAPACITÉS
+# =========================================================
+with tab1:
+    st.subheader("Capacité par équipe et par itération")
 
-    dev_name = st.sidebar.text_input("Nom du développeur")
-    dev_capacity = st.sidebar.number_input("Capacité / itération (jours)", 0.0, 30.0, 5.0)
-    dev_run = st.sidebar.number_input("Jours de run", 0.0, 10.0, 0.0)
-    dev_off = st.sidebar.number_input("Jours de congés", 0.0, 10.0, 0.0)
+    rows = []
+    for team in default_teams:
+        row = {"Équipe": team}
+        for it in iterations:
+            key = (team, it["name"])
+            row[it["name"]] = st.number_input(
+                f"{team} – {it['name']}",
+                min_value=0.0,
+                step=0.5,
+                value=st.session_state.capacity[key],
+                key=f"{team}_{it['name']}"
+            )
+            st.session_state.capacity[key] = row[it["name"]]
+        rows.append(row)
 
-    if st.sidebar.button("Ajouter le développeur"):
-        st.session_state.teams[team_selected].append({
-            "name": dev_name,
-            "capacity": dev_capacity,
-            "run": dev_run,
-            "off": dev_off
-        })
+    st.divider()
+    st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
-# =============================
-# CALCUL DES CAPACITÉS
-# =============================
-capacity = {}
+# =========================================================
+# ONGLET 2 – GANTT
+# =========================================================
+with tab2:
+    st.subheader("Gantt PI Planning")
 
-for team, devs in st.session_state.teams.items():
-    for sprint in sprints:
-        total = 0
-        for dev in devs:
-            total += dev["capacity"] - dev["run"] - dev["off"]
-        capacity[(team, sprint["name"])] = round(max(total, 0), 1)
+    planning = []
+    remaining_capacity = st.session_state.capacity.copy()
 
-# =============================
-# AFFICHAGE CAPACITÉS
-# =============================
-st.header("Capacité par équipe et itération")
+    for p in sorted(projects, key=lambda x: x["Priorité"]):
+        for it in iterations:
+            key = (p["Équipe"], it["name"])
+            if remaining_capacity.get(key, 0) >= p["Charge"]:
+                remaining_capacity[key] -= p["Charge"]
+                planning.append({
+                    "Projet": p["Projet"],
+                    "Équipe": p["Équipe"],
+                    "Début": it["start"],
+                    "Fin": it["end"],
+                    "Itération": it["name"]
+                })
+                break
 
-cap_rows = []
-for (team, sprint), cap in capacity.items():
-    cap_rows.append({
-        "Équipe": team,
-        "Itération": sprint,
-        "Capacité disponible": cap
-    })
-
-if cap_rows:
-    st.dataframe(pd.DataFrame(cap_rows), use_container_width=True)
-else:
-    st.info("Ajoute des équipes et des développeurs pour voir les capacités.")
-
-
-st.header("Backlog – Ajouter un projet")
-
-if st.session_state.teams:
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        project_name = st.text_input("Nom du projet")
-
-    with col2:
-        project_team = st.selectbox(
-            "Équipe",
-            list(st.session_state.teams.keys())
+    if planning:
+        df_gantt = pd.DataFrame(planning)
+        fig = px.timeline(
+            df_gantt,
+            x_start="Début",
+            x_end="Fin",
+            y="Équipe",
+            color="Projet",
+            hover_data=["Itération"]
         )
-
-    with col3:
-        project_load = st.number_input("Charge (jours)", 1.0, 100.0, 5.0)
-
-    with col4:
-        project_priority = st.number_input("Priorité", 1, 100, 1)
-
-    if st.button("Ajouter le projet"):
-        st.session_state.tasks.append({
-            "Projet": project_name,
-            "Équipe": project_team,
-            "load": project_load,
-            "priority": project_priority
-        })
-else:
-    st.info("Ajoute d'abord des équipes pour créer des projets.")
-
-st.header("Backlog actuel")
-
-if st.session_state.tasks:
-    df_backlog = pd.DataFrame(st.session_state.tasks).sort_values("priority")
-    st.dataframe(df_backlog, use_container_width=True)
-else:
-    st.info("Aucun projet dans le backlog.")
-
-# =============================
-# BACKLOG
-# =============================
-
-
-# =============================
-# PLANIFICATION AUTOMATIQUE
-# =============================
-planning = []
-remaining_capacity = capacity.copy()
-
-for task in sorted(st.session_state.tasks, key=lambda x: x["priority"]):
-    for sprint in sprints:
-        key = (task["Équipe"], sprint["name"])
-        if remaining_capacity.get(key, 0) >= task["load"]:
-            remaining_capacity[key] -= task["load"]
-            planning.append({
-                "Projet": task["Projet"],
-                "Équipe": task["Équipe"],
-                "Itération": sprint["name"],
-                "ETA": sprint["end"]
-            })
-            break
-
-# =============================
-# AFFICHAGE PLANNING
-# =============================
-st.header("Planning PI (calculé automatiquement)")
-
-if planning:
-    st.dataframe(pd.DataFrame(planning), use_container_width=True)
-else:
-    st.warning("Impossible de planifier : capacités insuffisantes ou équipes manquantes.")
-
+        fig.update_yaxes(autorange="reversed")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Aucun projet planifié. Vérifie les capacités.")
