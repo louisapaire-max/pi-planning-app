@@ -400,8 +400,9 @@ with tab3:
             ]        st.markdown("### 📋 Tâches du projet")
         st.info("💡 Modifiez le statut des tâches directement dans le tableau")
         
-        # Utiliser data_editor pour permettre l'édition
-        edited_tasks = st.data_editor(
+        # Utiliser data_editor pou
+                
+        st.markdown("### 📋 Tâches du projet")
             tasks_df,
             column_config={
                 "Tâche": st.column_config.TextColumn(
@@ -539,6 +540,7 @@ with tab5:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 
 
 
