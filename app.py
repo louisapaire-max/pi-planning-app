@@ -34,17 +34,59 @@ default_teams = [
 ]
 
 # =========================
-# BACKLOG (tes projets)
 # =========================
-projects = [
-    {"Projet": "Email - Add File Edition to Zimbra Pro", "Équipe": "Product unit", "Charge": 6, "Priorité": 1, "Statut": "To Do"},
-    {"Projet": "Website Revamp - homepage telephony", "Équipe": "Dev Web Front", "Charge": 8, "Priorité": 2, "Statut": "To Do"},
-    {"Projet": "VPS - Add more choice on Disk options", "Équipe": "Dev Web Back", "Charge": 5, "Priorité": 3, "Statut": "To Do"},
-    {"Projet": "Zimbra add yearly commitment prod", "Équipe": "Product unit", "Charge": 4, "Priorité": 4, "Statut": "To Do"},
-    {"Projet": "Telco - Create new plans for Trunk product", "Équipe": "Dev Order", "Charge": 7, "Priorité": 5, "Statut": "To Do"},
-    {"Projet": "Funnel order improvement - Pre-select OS APP", "Équipe": "Dev Web Front", "Charge": 6, "Priorité": 6, "Statut": "To Do"},
+# BACKLOG - Projets et Tâches
+# =========================
+
+# Template de tâches Catalogue Delivery (sans équipe assignée par défaut)
+catalogue_tasks_template = [
+    {"Tâche": "Contrat d'interface", "Ordre": 1, "Charge": 1},
+    {"Tâche": "Content", "Ordre": 2, "Charge": 2},
+    {"Tâche": "Documentation Project", "Ordre": 3, "Charge": 1},
+    {"Tâche": "Kick-off Digital", "Ordre": 4, "Charge": 0.5},
+    {"Tâche": "Étude d'impact", "Ordre": 5, "Charge": 2},
+    {"Tâche": "Maquettes/Wireframe", "Ordre": 6, "Charge": 3},
+    {"Tâche": "Rédaction US / Jira", "Ordre": 7, "Charge": 2},
+    {"Tâche": "Refinement", "Ordre": 8, "Charge": 1},
+    {"Tâche": "Integration OCMS", "Ordre": 9, "Charge": 2},
+    {"Tâche": "Dev Website", "Ordre": 10, "Charge": 5},
+    {"Tâche": "Dev Order", "Ordre": 11, "Charge": 3},
+    {"Tâche": "Tracking", "Ordre": 12, "Charge": 2},
+    {"Tâche": "check SEO", "Ordre": 13, "Charge": 1},
+    {"Tâche": "QA & UAT (langue source)", "Ordre": 14, "Charge": 3},
+    {"Tâche": "Traduction", "Ordre": 15, "Charge": 2},
+    {"Tâche": "QA WW", "Ordre": 16, "Charge": 2},
+    {"Tâche": "Plan de Production", "Ordre": 17, "Charge": 1},
+    {"Tâche": "PROD", "Ordre": 18, "Charge": 1},
 ]
 
+# Liste des projets
+projects = [
+    {"Projet": "Email - Add File Edition to Zimbra Pro", "Priorité": 1, "Statut": "To Do"},
+    {"Projet": "Website Revamp - homepage telephony", "Priorité": 2, "Statut": "To Do"},
+    {"Projet": "VPS - Add more choice on Disk options", "Priorité": 3, "Statut": "To Do"},
+    {"Projet": "Zimbra add yearly commitment prod", "Priorité": 4, "Statut": "To Do"},
+    {"Projet": "Telco - Create new plans for Trunk product", "Priorité": 5, "Statut": "To Do"},
+    {"Projet": "Funnel order improvement - Pre-select OS & APP", "Priorité": 6, "Statut": "To Do"},
+    {"Projet": "[VPS 2026 RBX7] - Deploy RBX7 region for VPS 2026", "Priorité": 7, "Statut": "To Do"},
+    {"Projet": "lot 2 website page Phone & Headset", "Priorité": 8, "Statut": "To Do"},
+    {"Projet": "Website Revamp - numbers page", "Priorité": 9, "Statut": "To Do"},
+    {"Projet": "VOIP Offers - Update 40 Included Destinations", "Priorité": 10, "Statut": "To Do"},
+    {"Projet": "Email - Website Quick Wins - Zimbra Webmail", "Priorité": 11, "Statut": "To Do"},
+    {"Projet": "Email - Website Quick Wins - New Exchange Product pages", "Priorité": 12, "Statut": "To Do"},
+    {"Projet": "VPS - Website New pages (Resellers & Panels)", "Priorité": 13, "Statut": "To Do"},
+    {"Projet": "Email - Website Quick Wins", "Priorité": 14, "Statut": "To Do"},
+    {"Projet": "Revamp Telephony", "Priorité": 15, "Statut": "To Do"},
+]
+
+# SESSION STATE pour les affectations tâche-équipe
+if "task_assignments" not in st.session_state:
+    st.session_state.task_assignments = {}
+    # Initialiser avec valeurs par défaut
+    for p in projects:
+        for task in catalogue_tasks_template:
+            key = (p["Projet"], task["Tâche"])
+            st.session_state.task_assignments[key] = "Product Owner"  # Équipe par défaut
 # =========================
 # SESSION STATE – CAPACITÉS
 # =========================
@@ -88,37 +130,59 @@ def calculate_net_capacity():
 # CALCUL DES ETA
 # =========================
 def calculate_eta():
-    """Calcule l'ETA de chaque projet basé sur la capacité nette"""
+    """Calcule l'ETA avec gestion des tâches détaillées par projet"""
     net_capacity = calculate_net_capacity()
     remaining_capacity = net_capacity.copy()
     planning = []
     
     for p in sorted(projects, key=lambda x: x["Priorité"]):
-        for it in iterations:
-            key = (p["Équipe"], it["name"])
-            capacity_available = remaining_capacity.get(key, 0)
+        # Pour chaque projet, traiter toutes ses tâches dans l'ordre
+        for task in sorted(catalogue_tasks_template, key=lambda t: t["Ordre"]):
+            key_assignment = (p["Projet"], task["Tâche"])
+            assigned_team = st.session_state.task_assignments.get(key_assignment, "Product Owner")
             
-            if capacity_available >= p["Charge"]:
-                remaining_capacity[key] -= p["Charge"]
+            placed = False
+            for it in iterations:
+                key_capacity = (assigned_team, it["name"])
+                capacity_available = remaining_capacity.get(key_capacity, 0)
+                
+                if capacity_available >= task["Charge"]:
+                    remaining_capacity[key_capacity] -= task["Charge"]
+                    planning.append({
+                        "Projet": p["Projet"],
+                        "Tâche": task["Tâche"],
+                        "Équipe": assigned_team,
+                        "Début": it["start"],
+                        "Fin": it["end"],
+                        "Itération": it["name"],
+                        "ETA": it["end"],
+                        "Statut": p["Statut"],
+                        "Priorité": p["Priorité"],
+                        "Ordre": task["Ordre"]
+                    })
+                    placed = True
+                    break
+            
+            if not placed:
+                # Tâche hors capacité
                 planning.append({
                     "Projet": p["Projet"],
-                    "Équipe": p["Équipe"],
-                    "Début": it["start"],
-                    "Fin": it["end"],
-                    "Itération": it["name"],
-                    "ETA": it["end"],
-                    "Statut": p["Statut"],
-                    "Priorité": p["Priorité"]
+                    "Tâche": task["Tâche"],
+                    "Équipe": assigned_team,
+                    "Début": None,
+                    "Fin": None,
+                    "Itération": "Hors capacité",
+                    "ETA": "Dépassement",
+                    "Statut": "Bloqué",
+                    "Priorité": p["Priorité"],
+                    "Ordre": task["Ordre"]
                 })
-                break
     
     return planning, remaining_capacity
-
 # =========================
 # ONGLETS
 # =========================
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Capacités", "🗓️ Congés & Run", "📈 Gantt & ETA", "✅ Tâches en cours"])
-
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Capacités", "🗓️ Congés & Run", "📝 Affectation Tâches", "📈 Gantt & ETA", "✅ Tâches en cours"])
 # =========================================================
 # ONGLET 1 – CAPACITÉS
 # =========================================================
@@ -289,3 +353,4 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
