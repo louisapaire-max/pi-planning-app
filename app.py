@@ -339,8 +339,25 @@ with tab3:
     with col4:
         coverage = (len(placed) / len(df_plan) * 100) if len(df_plan) > 0 else 0
         st.metric("📊 Couverture", f"{coverage:.0f}%")
-            
-    # Sélection du projet
+
+        
+    # Définition des projets
+    projects = [
+        {"Projet": "Email - Add File Edition to Zimbra Pro", "Priorité": 1, "Statut": "To Do"},
+        {"Projet": "Website Revamp - homepage telephony", "Priorité": 2, "Statut": "To Do"},
+        {"Projet": "QQE", "Priorité": 3, "Statut": "To Do"},
+        {"Projet": "Marketing", "Priorité": 4, "Statut": "To Do"},
+        {"Projet": "Design", "Priorité": 5, "Statut": "To Do"},
+        {"Projet": "Webmaster", "Priorité": 6, "Statut": "To Do"},
+        {"Projet": "Dev Web Front", "Priorité": 7, "Statut": "To Do"},
+        {"Projet": "Dev Web Back", "Priorité": 8, "Statut": "To Do"},
+        {"Projet": "Dev Order", "Priorité": 9, "Statut": "To Do"},
+        {"Projet": "Tracking", "Priorité": 10, "Statut": "To Do"},
+        {"Projet": "check SEO", "Priorité": 11, "Statut": "To Do"},
+        {"Projet": "QA & UAT (langue source)", "Priorité": 12, "Statut": "To Do"},
+        {"Projet": "Traduction", "Priorité": 13, "Statut": "To Do"},
+        {"Projet": "QA WW", "Priorité": 14, "Statut": "To Do"},
+    ]    # Sélection du projet
     selected_project = st.selectbox(
         "Sélectionner un projet",
         options=[p["Projet"] for p in projects],
@@ -525,4 +542,5 @@ with tab5:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 
