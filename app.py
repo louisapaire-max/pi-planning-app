@@ -1,30 +1,10 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
 from workalendar.europe import France
-import json
 
 st.set_page_config(page_title="PI Planning - Capacity Tool", layout="wide")
-st.title("📊 PI Planning - Advanced Capacity Planning")
-
-# Color palette for teams
-TEAM_COLORS = {
-    "Product Owner": "#FF6B6B",
-    "Product unit": "#4ECDC4",
-    "QQE": "#45B7D1",
-    "Marketing": "#FFA07A",
-    "Design": "#98D8C8",
-    "Webmaster": "#F7DC6F",
-    "Dev Web Front": "#BB8FCE",
-    "Dev Web Back": "#85C1E2",
-    "Dev Order": "#F8B88B",
-    "Tracking": "#82E0AA",
-    "SEO": "#F1948A",
-    "QA": "#AED6F1",
-    "Traduction": "#D7BDE2"
-}
+st.title("📊 PI Planning - Capacity Planning avec ETA")
 
 CAL_FRANCE = France()
 
@@ -44,27 +24,27 @@ TEAMS = [
 ]
 
 TASKS = [
-    {"name": "Brief requester Delivery", "team": "Product Owner", "order": 1, "charge": 1, "dependencies": []},
-    {"name": "Catalogue Delivery", "team": "Product unit", "order": 2, "charge": 2, "dependencies": []},
-    {"name": "Control d'interface", "team": "QQE", "order": 3, "charge": 1, "dependencies": ["Brief requester Delivery"]},
-    {"name": "Content", "team": "Marketing", "order": 4, "charge": 2, "dependencies": ["Brief requester Delivery"]},
-    {"name": "Documentation Project", "team": "Product Owner", "order": 5, "charge": 1, "dependencies": ["Brief requester Delivery"]},
-    {"name": "Kick-off Digital", "team": "Product Owner", "order": 6, "charge": 0.5, "dependencies": []},
-    {"name": "Etude d'impact", "team": "Product Owner", "order": 7, "charge": 2, "dependencies": ["Brief requester Delivery"]},
-    {"name": "Maquettes/Wireframe", "team": "Design", "order": 8, "charge": 3, "dependencies": ["Brief requester Delivery", "Content"]},
-    {"name": "Redaction US / Jira", "team": "Product Owner", "order": 9, "charge": 2, "dependencies": ["Maquettes/Wireframe"]},
-    {"name": "Refinement", "team": "Product Owner", "order": 10, "charge": 1, "dependencies": ["Redaction US / Jira"]},
-    {"name": "Integration OCMS", "team": "Webmaster", "order": 11, "charge": 2, "dependencies": ["Maquettes/Wireframe"]},
-    {"name": "Dev Website Front", "team": "Dev Web Front", "order": 12, "charge": 5, "dependencies": ["Refinement", "Maquettes/Wireframe"]},
-    {"name": "Dev Website Back", "team": "Dev Web Back", "order": 13, "charge": 5, "dependencies": ["Refinement"]},
-    {"name": "Dev Order", "team": "Dev Order", "order": 14, "charge": 3, "dependencies": ["Dev Website Back"]},
-    {"name": "Tracking", "team": "Tracking", "order": 15, "charge": 2, "dependencies": ["Dev Website Front", "Dev Website Back"]},
-    {"name": "check SEO", "team": "SEO", "order": 16, "charge": 1, "dependencies": ["Dev Website Front"]},
-    {"name": "QA & UAT (langue source)", "team": "QA", "order": 17, "charge": 3, "dependencies": ["Dev Website Front", "Dev Website Back", "Dev Order"]},
-    {"name": "Traduction", "team": "Traduction", "order": 18, "charge": 2, "dependencies": ["QA & UAT (langue source)"]},
-    {"name": "QA WW", "team": "QA", "order": 19, "charge": 2, "dependencies": ["Traduction"]},
-    {"name": "Plan de Production", "team": "Product Owner", "order": 20, "charge": 1, "dependencies": ["QA WW"]},
-    {"name": "PROD", "team": "Product Owner", "order": 21, "charge": 1, "dependencies": ["Plan de Production"]}
+    {"name": "Brief requester Delivery", "team": "Product Owner", "order": 1, "charge": 1},
+    {"name": "Catalogue Delivery", "team": "Product unit", "order": 2, "charge": 2},
+    {"name": "Control d'interface", "team": "QQE", "order": 3, "charge": 1},
+    {"name": "Content", "team": "Marketing", "order": 4, "charge": 2},
+    {"name": "Documentation Project", "team": "Product Owner", "order": 5, "charge": 1},
+    {"name": "Kick-off Digital", "team": "Product Owner", "order": 6, "charge": 0.5},
+    {"name": "Etude d'impact", "team": "Product Owner", "order": 7, "charge": 2},
+    {"name": "Maquettes/Wireframe", "team": "Design", "order": 8, "charge": 3},
+    {"name": "Redaction US / Jira", "team": "Product Owner", "order": 9, "charge": 2},
+    {"name": "Refinement", "team": "Product Owner", "order": 10, "charge": 1},
+    {"name": "Integration OCMS", "team": "Webmaster", "order": 11, "charge": 2},
+    {"name": "Dev Website Front", "team": "Dev Web Front", "order": 12, "charge": 5},
+    {"name": "Dev Website Back", "team": "Dev Web Back", "order": 13, "charge": 5},
+    {"name": "Dev Order", "team": "Dev Order", "order": 14, "charge": 3},
+    {"name": "Tracking", "team": "Tracking", "order": 15, "charge": 2},
+    {"name": "check SEO", "team": "SEO", "order": 16, "charge": 1},
+    {"name": "QA & UAT (langue source)", "team": "QA", "order": 17, "charge": 3},
+    {"name": "Traduction", "team": "Traduction", "order": 18, "charge": 2},
+    {"name": "QA WW", "team": "QA", "order": 19, "charge": 2},
+    {"name": "Plan de Production", "team": "Product Owner", "order": 20, "charge": 1},
+    {"name": "PROD", "team": "Product Owner", "order": 21, "charge": 1}
 ]
 
 PROJECTS = [
@@ -111,9 +91,6 @@ if "run_days" not in st.session_state:
 if "task_details" not in st.session_state:
     st.session_state.task_details = {}
 
-if "view_mode" not in st.session_state:
-    st.session_state.view_mode = "light"
-
 # ═════════════════════════════════════════════════════════════════════
 # FONCTIONS UTILITAIRES
 # ═════════════════════════════════════════════════════════════════════
@@ -152,8 +129,7 @@ def calculate_planning():
                         "Début": it["start"],
                         "Fin": it["end"],
                         "Charge": task["charge"],
-                        "Statut": "✅ Planifié",
-                        "Dependencies": task.get("dependencies", [])
+                        "Statut": "✅ Planifié"
                     })
                     placed = True
                     break
@@ -168,8 +144,7 @@ def calculate_planning():
                     "Début": None,
                     "Fin": None,
                     "Charge": task["charge"],
-                    "Statut": "❌ Bloqué",
-                    "Dependencies": task.get("dependencies", [])
+                    "Statut": "❌ Bloqué"
                 })
     
     return planning, remaining
@@ -178,149 +153,15 @@ def get_task_key(row):
     """Génère une clé unique pour une tâche"""
     return f"{row['Priorité']}_{row['Projet']}_{row['Tâche']}_{row['Équipe']}"
 
-def create_gantt_chart(df_plan):
-    """Crée un Gantt chart interactif avec Plotly"""
-    df_gantt = df_plan[df_plan["Statut"] == "✅ Planifié"].copy()
-    
-    if df_gantt.empty:
-        return None
-    
-    df_gantt["Start"] = pd.to_datetime(df_gantt["Début"])
-    df_gantt["End"] = pd.to_datetime(df_gantt["Fin"])
-    df_gantt["Duration"] = (df_gantt["End"] - df_gantt["Start"]).dt.days
-    
-    fig = go.Figure()
-    
-    for team in df_gantt["Équipe"].unique():
-        team_data = df_gantt[df_gantt["Équipe"] == team]
-        
-        for _, row in team_data.iterrows():
-            fig.add_trace(go.Bar(
-                y=[row["Équipe"]],
-                x=[row["Duration"]],
-                base=row["Start"],
-                name=row["Tâche"],
-                marker=dict(color=TEAM_COLORS.get(team, "#808080")),
-                customdata=[f"{row['Projet']}<br>{row['Tâche']}<br>Charge: {row['Charge']}j"],
-                hovertemplate="<b>%{customdata}</b><br>%{x} jours<extra></extra>",
-                orientation="h",
-                showlegend=False,
-            ))
-    
-    fig.update_layout(
-        title="📊 Gantt Chart du Planning",
-        barmode="overlay",
-        height=600,
-        xaxis_title="Timeline",
-        yaxis_title="Équipes",
-        hovermode="closest",
-        template="plotly_white",
-        font=dict(size=11)
-    )
-    
-    return fig
-
-def detect_dependencies_issues(planning):
-    """Détecte les problèmes de dépendances"""
-    issues = []
-    task_iterations = {}
-    
-    # Créer un mapping task -> itération
-    for item in planning:
-        task_iterations[item["Tâche"]] = item["Itération"]
-    
-    # Vérifier chaque tâche et ses dépendances
-    for item in planning:
-        if item["Dependencies"]:
-            current_iter = ITERATIONS.index(next((it for it in ITERATIONS if it["name"] == item["Itération"]), None)) if item["Itération"] != "⚠️ Dépassement" else -1
-            
-            for dep in item["Dependencies"]:
-                if dep in task_iterations:
-                    dep_iter = ITERATIONS.index(next((it for it in ITERATIONS if it["name"] == task_iterations[dep]), None)) if task_iterations[dep] != "⚠️ Dépassement" else -1
-                    
-                    if dep_iter >= current_iter and current_iter != -1:
-                        issues.append({
-                            "type": "⚠️ Chaîne de dépendance cassée",
-                            "task": item["Tâche"],
-                            "dependency": dep,
-                            "severity": "HIGH"
-                        })
-    
-    return issues
-
-def optimize_team_allocation(planning, remaining):
-    """Propose des optimisations d'assignation"""
-    suggestions = []
-    
-    blocked_tasks = [p for p in planning if p["Statut"] == "❌ Bloqué"]
-    
-    for blocked in blocked_tasks:
-        team = blocked["Équipe"]
-        charge = blocked["Charge"]
-        
-        # Chercher une équipe alternative avec capacité
-        for iteration in ITERATIONS:
-            key = (team, iteration["name"])
-            available = remaining.get(key, 0)
-            
-            if available >= charge:
-                suggestions.append({
-                    "task": blocked["Tâche"],
-                    "current_team": team,
-                    "available_iteration": iteration["name"],
-                    "capacity": available,
-                    "gain": "Débloque la tâche"
-                })
-                break
-    
-    return suggestions
-
-# ═════════════════════════════════════════════════════════════════════
-# SIDEBAR - FILTRES & CONTRÔLES
-# ═════════════════════════════════════════════════════════════════════
-
-st.sidebar.markdown("## 🎛️ Contrôles")
-
-# View mode
-st.session_state.view_mode = st.sidebar.radio(
-    "🎨 Thème",
-    ["light", "dark"],
-    index=0
-)
-
-# Filtres
-st.sidebar.markdown("### 🔍 Filtres")
-selected_teams = st.sidebar.multiselect(
-    "Équipes",
-    TEAMS,
-    default=TEAMS,
-    key="filter_teams"
-)
-
-selected_statuses = st.sidebar.multiselect(
-    "Statuts",
-    TASK_STATUSES,
-    default=["À faire", "En cours"],
-    key="filter_statuses"
-)
-
-selected_iterations = st.sidebar.multiselect(
-    "Itérations",
-    [it["name"] for it in ITERATIONS],
-    default=[it["name"] for it in ITERATIONS],
-    key="filter_iterations"
-)
-
 # ═════════════════════════════════════════════════════════════════════
 # ONGLETS PRINCIPAUX
 # ═════════════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Capacités",
     "🏖️ Congés & Run",
     "📋 Planning & ETA",
-    "📈 Gantt",
-    "🔗 Dépendances",
+    "📈 Timeline",
     "✅ En cours"
 ])
 
@@ -464,14 +305,8 @@ with tab3:
     planning, remaining = calculate_planning()
     df_plan = pd.DataFrame(planning)
     
-    # Appliquer les filtres
-    df_plan_filtered = df_plan[
-        (df_plan["Équipe"].isin(selected_teams)) &
-        (df_plan["Itération"].isin(selected_iterations))
-    ].copy()
-    
-    placed = df_plan_filtered[df_plan_filtered["Statut"] == "✅ Planifié"]
-    blocked = df_plan_filtered[df_plan_filtered["Statut"] == "❌ Bloqué"]
+    placed = df_plan[df_plan["Statut"] == "✅ Planifié"]
+    blocked = df_plan[df_plan["Statut"] == "❌ Bloqué"]
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -482,7 +317,7 @@ with tab3:
     with col3:
         st.metric("📦 Charge planifiée", f"{placed['Charge'].sum():.1f}j")
     with col4:
-        coverage = (len(placed) / len(df_plan_filtered) * 100) if len(df_plan_filtered) > 0 else 0
+        coverage = (len(placed) / len(df_plan) * 100) if len(df_plan) > 0 else 0
         st.metric("📊 Couverture", f"{coverage:.0f}%")
     
     st.divider()
@@ -491,7 +326,7 @@ with tab3:
     st.info("💡 Vous pouvez éditer les dates de début/fin et le statut pour chaque tâche")
     
     # Créer une copie du dataframe avec colonnes additionnelles
-    df_editable = df_plan_filtered.copy()
+    df_editable = df_plan.copy()
     
     # Ajouter les colonnes de dates et statut
     df_editable["Start Date"] = df_editable.apply(
@@ -581,77 +416,33 @@ with tab3:
     st.dataframe(df_remaining.style.applymap(highlight_low), use_container_width=True)
 
 # ═════════════════════════════════════════════════════════════════════
-# TAB 4: GANTT INTERACTIF
+# TAB 4: TIMELINE
 # ═════════════════════════════════════════════════════════════════════
 with tab4:
-    st.subheader("📈 Gantt Chart Interactif")
-    st.info("📅 Visualisation dynamique avec timeline et dépendances")
+    st.subheader("📈 Timeline du planning")
+    st.info("📅 Visualisation simple des tâches planifiées par équipe et itération")
     
-    gantt_fig = create_gantt_chart(df_plan_filtered)
+    planning, _ = calculate_planning()
+    df_gantt = pd.DataFrame([p for p in planning if p["Statut"] == "✅ Planifié"])
     
-    if gantt_fig:
-        st.plotly_chart(gantt_fig, use_container_width=True)
+    if not df_gantt.empty:
+        st.markdown("**Tâches par itération:**")
+        for it in ITERATIONS:
+            st.markdown(f"#### {it['name']} ({it['start']} → {it['end']})")
+            
+            tasks_it = df_gantt[df_gantt["Itération"] == it["name"]]
+            if not tasks_it.empty:
+                display = tasks_it[["Équipe", "Projet", "Tâche", "Charge"]].sort_values("Équipe")
+                st.dataframe(display, use_container_width=True, hide_index=True, height=200)
+            else:
+                st.markdown("_Aucune tâche planifiée_")
     else:
-        st.warning("❌ Aucune tâche planifiée à afficher")
+        st.info("Aucune tâche planifiée à afficher")
 
 # ═════════════════════════════════════════════════════════════════════
-# TAB 5: GESTION DÉPENDANCES & AUTO-ASSIGNATION
+# TAB 5: EN COURS
 # ═════════════════════════════════════════════════════════════════════
 with tab5:
-    st.subheader("🔗 Gestion des Dépendances & Auto-Assignation")
-    
-    col_dep, col_opt = st.columns(2)
-    
-    with col_dep:
-        st.markdown("### 🔗 Chaîne de Dépendances")
-        
-        # Détection des problèmes
-        dependency_issues = detect_dependencies_issues(planning)
-        
-        if dependency_issues:
-            st.error(f"⚠️ **{len(dependency_issues)} problèmes détectés**")
-            for issue in dependency_issues:
-                st.error(f"- {issue['task']} dépend de {issue['dependency']} (chronologie inversée)")
-        else:
-            st.success("✅ Toutes les dépendances sont respectées!")
-        
-        st.divider()
-        
-        # Afficher le graphe de dépendances
-        st.markdown("#### 📊 Chaîne critique:")
-        for task in TASKS:
-            if task.get("dependencies"):
-                deps_str = ", ".join(task["dependencies"])
-                st.write(f"📌 **{task['name']}** ← {deps_str}")
-    
-    with col_opt:
-        st.markdown("### 🤖 Optimisation Intelligente")
-        
-        # Suggestions d'assignation
-        suggestions = optimize_team_allocation(planning, remaining)
-        
-        if suggestions:
-            st.warning(f"💡 **{len(suggestions)} opportunités d'optimisation**")
-            
-            for idx, suggestion in enumerate(suggestions, 1):
-                with st.expander(f"💡 Opportunité {idx}: {suggestion['task']}"):
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.metric("Tâche", suggestion['task'][:30])
-                    with col_b:
-                        st.metric("Itération disponible", suggestion['available_iteration'])
-                    
-                    st.info(f"🎯 {suggestion['gain']}")
-                    
-                    if st.button(f"✅ Appliquer", key=f"apply_{idx}"):
-                        st.success(f"✅ {suggestion['task']} optimisée!")
-        else:
-            st.success("✅ Aucune opportunité d'optimisation - Planning optimal!")
-
-# ═════════════════════════════════════════════════════════════════════
-# TAB 6: EN COURS
-# ═════════════════════════════════════════════════════════════════════
-with tab6:
     st.subheader("✅ Suivi des tâches actives")
     
     planning, _ = calculate_planning()
@@ -711,35 +502,5 @@ with tab6:
         else:
             st.info("Aucune tâche prévue dans les 7 prochains jours")
 
-# ═════════════════════════════════════════════════════════════════════
-# FOOTER
-# ═════════════════════════════════════════════════════════════════════
 st.divider()
-
-col_footer_1, col_footer_2, col_footer_3 = st.columns(3)
-
-with col_footer_1:
-    if st.button("📥 Exporter JSON"):
-        json_str = json.dumps(st.session_state.task_details, indent=2, default=str)
-        st.download_button(
-            label="Télécharger JSON",
-            data=json_str,
-            file_name="planning_export.json",
-            mime="application/json"
-        )
-
-with col_footer_2:
-    if st.button("📊 Exporter Excel"):
-        df_export = df_plan[["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge"]].sort_values("Priorité")
-        csv = df_export.to_csv(index=False)
-        st.download_button(
-            label="Télécharger CSV",
-            data=csv,
-            file_name="planning_export.csv",
-            mime="text/csv"
-        )
-
-with col_footer_3:
-    st.write("")
-
-st.markdown(f"🛠 **PI Planning Tool v3.0** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v2.4** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
