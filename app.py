@@ -172,7 +172,7 @@ if "task_assignments" not in st.session_state:
     for p in projects:
         for task in catalogue_tasks_template:
             key = (p["Projet"], task["Tâche"])
-            st.session_state.task_assignments[key] = "Product Owner"  # Équipe par défaut
+            st.session_state.task_assignments[key] =task["Équipe"]  # Équipe du template
 # =========================
 # SESSION STATE – CAPACITÉS
 # =========================
@@ -552,6 +552,7 @@ with tab3:
         
         if holidays_info:
             st.dataframe(pd.DataFrame(holidays_info), use_container_width=True, hide_index=True)
+
 
 
 
