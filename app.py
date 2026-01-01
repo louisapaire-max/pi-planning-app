@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.figure_factory as ff
 from datetime import datetime
 from workalendar.europe import France
 
@@ -145,6 +144,35 @@ def calculate_planning():
     
     return planning, remaining
 
+def render_gantt_html():
+    """Génère un Gantt simple en HTML/CSS"""
+    planning, _ = calculate_planning()
+    df = pd.DataFrame([p for p in planning if p["Statut"] == "✅ Planifié"])
+    
+    if df.empty:
+        return "<p style='color: gray;'>Aucune tâche planifiée</p>"
+    
+    html = """
+    <div style="font-size: 12px; font-family: monospace;">
+    """
+    
+    for _, row in df.iterrows():
+        start = pd.to_datetime(row["Début"])
+        end = pd.to_datetime(row["Fin"])
+        width = (end - start).days * 8
+        
+        html += f"""
+        <div style="margin: 5px 0; display: flex; align-items: center;">
+            <span style="width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold;">{row['Équipe'][:20]}</span>
+            <div style="background: #2080a0; height: 20px; width: {width}px; border-radius: 3px; margin: 0 5px; color: white; display: flex; align-items: center; justify-content: center; font-size: 10px;">
+                {row['Itération'][:15]}
+            </div>
+        </div>
+        """
+    
+    html += "</div>"
+    return html
+
 # ═════════════════════════════════════════════════════════════════════
 # ONGLETS PRINCIPAUX
 # ═════════════════════════════════════════════════════════════════════
@@ -153,7 +181,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Capacités",
     "🏖️ Congés & Run",
     "📋 Planning & ETA",
-    "📈 Gantt",
+    "📈 Timeline",
     "✅ En cours"
 ])
 
@@ -343,61 +371,29 @@ with tab3:
     st.dataframe(df_remaining.style.applymap(highlight_low), use_container_width=True)
 
 # ═════════════════════════════════════════════════════════════════════
-# TAB 4: GANTT
+# TAB 4: TIMELINE (Gantt simplifié)
 # ═════════════════════════════════════════════════════════════════════
 with tab4:
-    st.subheader("📈 Diagramme de Gantt")
+    st.subheader("📈 Timeline du planning")
+    st.info("📅 Visualisation simple des tâches planifiées par équipe et itération")
     
-    gantt_data = []
-    for it in ITERATIONS:
-        gantt_data.append({
-            "Task": it["name"],
-            "Start": it["start"],
-            "Finish": it["end"],
-            "Resource": "Itération"
-        })
+    planning, _ = calculate_planning()
+    df_gantt = pd.DataFrame([p for p in planning if p["Statut"] == "✅ Planifié"])
     
-    fig = ff.create_gantt(
-        gantt_data,
-        colors={"Itération": "rgb(32, 128, 160)"},
-        showgrid_x=True,
-        group_tasks=True,
-        height=300
-    )
-    
-    period_start = pd.to_datetime(ITERATIONS[0]["start"])
-    period_end = pd.to_datetime(ITERATIONS[-1]["end"])
-    
-    for day in pd.date_range(period_start, period_end, freq='D'):
-        if day.weekday() >= 5:
-            fig.add_vrect(
-                x0=day, x1=day + pd.Timedelta(days=1),
-                fillcolor="gray", opacity=0.1, layer="below", line_width=0
-            )
-    
-    for year in range(period_start.year, period_end.year + 1):
-        for holiday_date, _ in CAL_FRANCE.holidays(year):
-            holiday = pd.Timestamp(holiday_date)
-            if period_start <= holiday <= period_end:
-                fig.add_vline(x=holiday, line_width=2, line_dash="dash", line_color="red", opacity=0.4)
-    
-    fig.update_layout(
-        title="Planning des Itérations",
-        xaxis_title="Date",
-        height=350,
-        xaxis=dict(tickformat="%d/%m", tickangle=-45),
-        hovermode="closest"
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("🟦 **Bleu**: Itérations")
-    with col2:
-        st.markdown("🔴 **Ligne rouge**: Jours fériés FR")
-    with col3:
-        st.markdown("⬜ **Gris**: Weekends")
+    if not df_gantt.empty:
+        # Tableau timeline
+        st.markdown("**Tâches par itération:**")
+        for it in ITERATIONS:
+            st.markdown(f"#### {it['name']} ({it['start']} → {it['end']})")
+            
+            tasks_it = df_gantt[df_gantt["Itération"] == it["name"]]
+            if not tasks_it.empty:
+                display = tasks_it[["Équipe", "Projet", "Tâche", "Charge"]].sort_values("Équipe")
+                st.dataframe(display, use_container_width=True, hide_index=True, height=200)
+            else:
+                st.markdown("_Aucune tâche planifiée_")
+    else:
+        st.info("Aucune tâche planifiée à afficher")
 
 # ═════════════════════════════════════════════════════════════════════
 # TAB 5: EN COURS
@@ -463,4 +459,4 @@ with tab5:
             st.info("Aucune tâche prévue dans les 7 prochains jours")
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v2.1** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
