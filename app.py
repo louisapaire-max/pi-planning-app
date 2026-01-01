@@ -394,11 +394,10 @@ with tab3:
                     "Charge": task["Charge"],
                     "Statut": "Backlog"  # Statut par défaut
                 }
-                for task in catalogue_tasks_template
-            ]
+                for task in TASKS            ]
         
         # Tableau éditable des tâches
-        tasks_df = pd.DataFrame(st.session_state.project_tasks[selected_project])
+        tasks_df = pd.DataFrame(st.TASKS.project_tasks[selected_project])
         
         st.markdown("### 📋 Tâches du projet")
         st.info("💡 Modifiez le statut des tâches directement dans le tableau")
@@ -542,5 +541,6 @@ with tab5:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 
 
