@@ -268,11 +268,9 @@ def calculate_eta():
 # =========================
 # ONGLETS
 # =========================
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Capacités", "🗓️ Congés & Run", "📝 Affectation Tâches", "📈 Gantt & ETA", "✅ Tâches en cours"])
 # =========================================================
 # ONGLET 1 – CAPACITÉS
 # =========================================================
-with tab1:
     st.subheader("Capacité par équipe et par itération (jours)")
     st.info("💡 Saisir la capacité brute de chaque équipe par itération")
     
@@ -303,7 +301,6 @@ with tab1:
 # =========================================================
 # ONGLET 2 – CONGÉS & RUN DAYS
 # =========================================================
-with tab2:
     st.subheader("Congés et jours de run par équipe et itération")
     st.info("💡 Déclarer les congés et jours de run pour chaque équipe")
     
@@ -361,7 +358,6 @@ with tab2:
 # =========================================================
 # ONGLET 3 – GANTT & ETA
 # =========================================================
-with tab3:
     st.subheader("Gantt PI Planning avec ETA")
     
     planning, remaining = calculate_eta()
@@ -403,7 +399,6 @@ with tab3:
 # =========================================================
 # ONGLET 4 – TÂCHES EN COURS
 # =========================================================
-with tab4:
     st.subheader("Suivi des tâches en cours")
     st.info("💡 Basé sur la date du jour et les ETA calculés")
     
@@ -557,6 +552,7 @@ with tab3:
         
         if holidays_info:
             st.dataframe(pd.DataFrame(holidays_info), use_container_width=True, hide_index=True)
+
 
 
 
