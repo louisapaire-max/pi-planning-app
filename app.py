@@ -430,7 +430,6 @@ with tab3:
             use_container_width=True,
             hide_index=True,
             num_rows="fixed"
-        )
         
         # Mettre à jour le state avec les modifications
         st.session_state.project_tasks[selected_project] = edited_tasks.to_dict('records')
@@ -540,6 +539,7 @@ with tab5:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 
 
 
