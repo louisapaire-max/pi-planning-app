@@ -8,6 +8,20 @@ import streamlit_shadcn_ui as ui
 st.set_page_config(page_title="PI Planning", layout="wide")
 st.title("PI Planning - Capacity Planning avec ETA")
 
+
+# =========================
+# ITÉRATIONS
+# =========================
+iterations = [
+    {"name": "Itération #2", "start": "2026-01-12", "end": "2026-01-30"},
+    {"name": "Itération #3", "start": "2026-02-02", "end": "2026-02-20"},
+    {"name": "Itération #4", "start": "2026-02-23", "end": "2026-03-13"},
+]
+
+# =========================
+# ÉQUIPES PAR DÉFAUT
+# =========================
+default_teams = [
     "Product unit",
     "Dev Web Front",
     "Dev Web Back",
@@ -342,6 +356,7 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
 
 
