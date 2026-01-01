@@ -65,6 +65,8 @@ PROJECTS = [
     {"name": "Revamp Telephony", "priority": 15, "status": "To Do"},
 ]
 
+TASK_STATUSES = ["À faire", "En cours", "Terminé", "Bloqué", "En attente"]
+
 # ═════════════════════════════════════════════════════════════════════
 # SESSION STATE INITIALIZATION
 # ═════════════════════════════════════════════════════════════════════
@@ -85,6 +87,9 @@ if "run_days" not in st.session_state:
     for team in TEAMS:
         for it in ITERATIONS:
             st.session_state.run_days[(team, it["name"])] = 0.0
+
+if "task_details" not in st.session_state:
+    st.session_state.task_details = {}
 
 # ═════════════════════════════════════════════════════════════════════
 # FONCTIONS UTILITAIRES
@@ -143,6 +148,10 @@ def calculate_planning():
                 })
     
     return planning, remaining
+
+def get_task_key(row):
+    """Génère une clé unique pour une tâche"""
+    return f"{row['Priorité']}_{row['Projet']}_{row['Tâche']}_{row['Équipe']}"
 
 # ═════════════════════════════════════════════════════════════════════
 # ONGLETS PRINCIPAUX
@@ -313,17 +322,74 @@ with tab3:
     
     st.divider()
     
-    st.markdown("**Détail du planning**")
-    display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge", "Statut"]
-    st.dataframe(
-        df_plan[display_cols].sort_values("Priorité"),
-        use_container_width=True,
-        hide_index=True,
-        height=400
+    st.markdown("**Détail du planning (modifiable)**")
+    st.info("💡 Vous pouvez éditer les dates de début/fin et le statut pour chaque tâche")
+    
+    # Créer une copie du dataframe avec colonnes additionnelles
+    df_editable = df_plan.copy()
+    
+    # Ajouter les colonnes de dates et statut
+    df_editable["Start Date"] = df_editable.apply(
+        lambda row: st.session_state.task_details.get(get_task_key(row), {}).get("start_date", row["Début"]),
+        axis=1
+    )
+    df_editable["End Date"] = df_editable.apply(
+        lambda row: st.session_state.task_details.get(get_task_key(row), {}).get("end_date", row["Fin"]),
+        axis=1
+    )
+    df_editable["Statut Custom"] = df_editable.apply(
+        lambda row: st.session_state.task_details.get(get_task_key(row), {}).get("status", "À faire"),
+        axis=1
     )
     
+    # Colonnes à afficher
+    display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge", "Start Date", "End Date", "Statut Custom"]
+    
+    # Editor avec colonnes modifiables
+    edited_df = st.data_editor(
+        df_editable[display_cols].sort_values("Priorité"),
+        use_container_width=True,
+        hide_index=True,
+        height=500,
+        key="planning_editor",
+        column_config={
+            "Start Date": st.column_config.DateColumn(
+                "Start Date",
+                format="DD/MM/YYYY",
+                width="medium"
+            ),
+            "End Date": st.column_config.DateColumn(
+                "End Date",
+                format="DD/MM/YYYY",
+                width="medium"
+            ),
+            "Statut Custom": st.column_config.SelectboxColumn(
+                "Statut",
+                options=TASK_STATUSES,
+                width="medium"
+            ),
+            "Priorité": st.column_config.NumberColumn(disabled=True),
+            "Projet": st.column_config.TextColumn(disabled=True, width="large"),
+            "Tâche": st.column_config.TextColumn(disabled=True, width="large"),
+            "Équipe": st.column_config.TextColumn(disabled=True),
+            "Itération": st.column_config.TextColumn(disabled=True),
+            "Charge": st.column_config.NumberColumn(disabled=True),
+        }
+    )
+    
+    # Sauvegarder les modifications
+    for idx, row in edited_df.iterrows():
+        task_key = f"{row['Priorité']}_{row['Projet']}_{row['Tâche']}_{row['Équipe']}"
+        st.session_state.task_details[task_key] = {
+            "start_date": row["Start Date"],
+            "end_date": row["End Date"],
+            "status": row["Statut Custom"]
+        }
+    
+    st.divider()
+    
+    # Afficher les tâches bloquées
     if not blocked.empty:
-        st.divider()
         st.warning(f"⚠️ **{len(blocked)} tâches en dépassement de capacité**")
         st.dataframe(
             blocked[["Priorité", "Projet", "Tâche", "Équipe", "Charge"]].sort_values("Priorité"),
@@ -339,6 +405,14 @@ with tab3:
         remaining_data[team] = [remaining[(team, it["name"])] for it in ITERATIONS]
     
     df_remaining = pd.DataFrame(remaining_data, index=[it["name"] for it in ITERATIONS]).T
+    
+    def highlight_low(val):
+        if val < 2:
+            return "background-color: #ffcccc"
+        elif val < 5:
+            return "background-color: #ffffcc"
+        return ""
+    
     st.dataframe(df_remaining.style.applymap(highlight_low), use_container_width=True)
 
 # ═════════════════════════════════════════════════════════════════════
@@ -429,4 +503,4 @@ with tab5:
             st.info("Aucune tâche prévue dans les 7 prochains jours")
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v2.3** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v2.4** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
