@@ -160,26 +160,28 @@ default_teams = [
 
 # Template de tâches Catalogue Delivery (sans équipe assignée par défaut)
 catalogue_tasks_template = [
-    {"Tâche": "Contrat d'interface", "Ordre": 1, "Charge": 1},
-    {"Tâche": "Content", "Ordre": 2, "Charge": 2},
-    {"Tâche": "Documentation Project", "Ordre": 3, "Charge": 1},
-    {"Tâche": "Kick-off Digital", "Ordre": 4, "Charge": 0.5},
-    {"Tâche": "Étude d'impact", "Ordre": 5, "Charge": 2},
-    {"Tâche": "Maquettes/Wireframe", "Ordre": 6, "Charge": 3},
-    {"Tâche": "Rédaction US / Jira", "Ordre": 7, "Charge": 2},
-    {"Tâche": "Refinement", "Ordre": 8, "Charge": 1},
-    {"Tâche": "Integration OCMS", "Ordre": 9, "Charge": 2},
-    {"Tâche": "Dev Website", "Ordre": 10, "Charge": 5},
-    {"Tâche": "Dev Order", "Ordre": 11, "Charge": 3},
-    {"Tâche": "Tracking", "Ordre": 12, "Charge": 2},
-    {"Tâche": "check SEO", "Ordre": 13, "Charge": 1},
-    {"Tâche": "QA & UAT (langue source)", "Ordre": 14, "Charge": 3},
-    {"Tâche": "Traduction", "Ordre": 15, "Charge": 2},
-    {"Tâche": "QA WW", "Ordre": 16, "Charge": 2},
-    {"Tâche": "Plan de Production", "Ordre": 17, "Charge": 1},
-    {"Tâche": "PROD", "Ordre": 18, "Charge": 1},
+    {"Tâche": "Brief requester Delivery", "Équipe": "Product Owner", "Ordre": 1, "Charge": 1},
+    {"Tâche": "Catalogue Delivery", "Équipe": "Product unit", "Ordre": 2, "Charge": 2},
+    {"Tâche": "Contrat d'interface", "Équipe": "QOE", "Ordre": 3, "Charge": 1},
+    {"Tâche": "Content", "Équipe": "Marketing", "Ordre": 4, "Charge": 2},
+    {"Tâche": "Documentation Project", "Équipe": "Product Owner", "Ordre": 5, "Charge": 1},
+    {"Tâche": "Kick-off Digital", "Équipe": "Product Owner", "Ordre": 6, "Charge": 0.5},
+    {"Tâche": "Étude d'impact", "Équipe": "Product Owner", "Ordre": 7, "Charge": 2},
+    {"Tâche": "Maquettes/Wireframe", "Équipe": "Design", "Ordre": 8, "Charge": 3},
+    {"Tâche": "Rédaction US / Jira", "Équipe": "Product Owner", "Ordre": 9, "Charge": 2},
+    {"Tâche": "Refinement", "Équipe": "Product Owner", "Ordre": 10, "Charge": 1},
+    {"Tâche": "Integration OCMS", "Équipe": "Webmaster", "Ordre": 11, "Charge": 2},
+    {"Tâche": "Dev Website Front", "Équipe": "Dev Web Front", "Ordre": 12, "Charge": 5},
+    {"Tâche": "Dev Website Back", "Équipe": "Dev Web Back", "Ordre": 13, "Charge": 5},
+    {"Tâche": "Dev Order", "Équipe": "Dev Order", "Ordre": 14, "Charge": 3},
+    {"Tâche": "Tracking", "Équipe": "Tracking", "Ordre": 15, "Charge": 2},
+    {"Tâche": "check SEO", "Équipe": "SEO", "Ordre": 16, "Charge": 1},
+    {"Tâche": "QA & UAT (langue source)", "Équipe": "QA", "Ordre": 17, "Charge": 3},
+    {"Tâche": "Traduction", "Équipe": "Traduction", "Ordre": 18, "Charge": 2},
+    {"Tâche": "QA WW", "Équipe": "QA", "Ordre": 19, "Charge": 2},
+    {"Tâche": "Plan de Production", "Équipe": "Product Owner", "Ordre": 20, "Charge": 1},
+    {"Tâche": "PROD", "Équipe": "Product Owner", "Ordre": 21, "Charge": 1},
 ]
-
 # Liste des projets
 projects = [
     {"Projet": "Email - Add File Edition to Zimbra Pro", "Priorité": 1, "Statut": "To Do"},
@@ -475,6 +477,7 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
 
 
