@@ -389,12 +389,12 @@ with tab3:
             # Initialiser avec le template
             st.session_state.project_tasks[selected_project] = [
                 {
-                    "Tâche": task["Tâche"],
-                    "Équipe": task["Équipe"],
-                    "Charge": task["Charge"],
-                    "Statut": "Backlog"  # Statut par défaut
-                }
-                for task in TASKS            ]
+                    "Tâche": task["name"],
+                    "Équipe": task["team"],
+                    "Charge": task["charge"],
+                    "Statut": "Backlog",  # Statut par défaut
+                    "Start Date": None,
+                    "End Date": None                for task in TASKS            ]
         
         # Tableau éditable des tâches
         tasks_df = pd.DataFrame(st.TASKS.project_tasks[selected_project])
@@ -541,6 +541,7 @@ with tab5:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 
 
 
