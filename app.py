@@ -1,14 +1,9 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.figure_factory as ff
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
 from workalendar.europe import France
 
-# ═════════════════════════════════════════════════════════════════════
-# CONFIG
-# ═════════════════════════════════════════════════════════════════════
 st.set_page_config(page_title="PI Planning - Capacity Tool", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec ETA")
 
@@ -105,7 +100,7 @@ def get_net_capacity(team: str, iteration: dict) -> float:
     return max(0, brute - leaves - run)
 
 def calculate_planning():
-    """Calcul l'ETA pour toutes les tâches"""
+    """Calcule l'ETA pour toutes les tâches"""
     remaining = {}
     for team in TEAMS:
         for it in ITERATIONS:
@@ -150,12 +145,6 @@ def calculate_planning():
     
     return planning, remaining
 
-def format_date(date_str):
-    """Format date string"""
-    if not date_str:
-        return ""
-    return pd.to_datetime(date_str).strftime("%d/%m/%Y")
-
 # ═════════════════════════════════════════════════════════════════════
 # ONGLETS PRINCIPAUX
 # ═════════════════════════════════════════════════════════════════════
@@ -187,6 +176,7 @@ with tab1:
     edited_cap = st.data_editor(
         df_cap,
         use_container_width=True,
+        key="capacity_editor",
         column_config={
             it["name"]: st.column_config.NumberColumn(
                 it["name"], min_value=0, max_value=100, step=0.5, format="%.1f j"
@@ -194,7 +184,6 @@ with tab1:
         }
     )
     
-    # Mettre à jour session state
     for idx, team in enumerate(TEAMS):
         for jdx, it in enumerate(ITERATIONS):
             key = (team, it["name"])
@@ -202,7 +191,6 @@ with tab1:
     
     st.divider()
     
-    # KPIs
     col1, col2, col3, col4 = st.columns(4)
     total_cap = edited_cap.sum().sum()
     avg_per_team = edited_cap.mean(axis=1).mean()
@@ -239,6 +227,7 @@ with tab2:
         edited_leave = st.data_editor(
             df_leave,
             use_container_width=True,
+            key="leaves_editor",
             column_config={
                 it["name"]: st.column_config.NumberColumn(
                     it["name"], min_value=0, max_value=20, step=0.5, format="%.1f j"
@@ -264,6 +253,7 @@ with tab2:
         edited_run = st.data_editor(
             df_run,
             use_container_width=True,
+            key="run_days_editor",
             column_config={
                 it["name"]: st.column_config.NumberColumn(
                     it["name"], min_value=0, max_value=20, step=0.5, format="%.1f j"
@@ -473,4 +463,4 @@ with tab5:
             st.info("Aucune tâche prévue dans les 7 prochains jours")
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v2.0** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v2.1** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
