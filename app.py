@@ -448,14 +448,16 @@ with tab4:
         today = datetime.now().date()
         
         # Filtrer les tâches en cours
-        df_planning["Début_dt"] = pd.to_datetime(df_planning["Début"]).dt.date
-        df_planning["ETA_dt"] = pd.to_datetime(df_planning["ETA"]).dt.date
-        
+        # Filtrer les tâches en cours (ignorer les erreurs de conversion de date)
+        df_planning["Début_dt"] = pd.to_datetime(df_planning["Début"], errors='coerce').dt.date
+        df_planning["ETA_dt"] = pd.to_datetime(df_planning["ETA"], errors='coerce').dt.date        
+        # Filtrer uniquement les tâches avec des dates valides
         in_progress = df_planning[
+            (df_planning["Début_dt"].notna()) &
+            (df_planning["ETA_dt"].notna()) &
             (df_planning["Début_dt"] <= today) & 
             (df_planning["ETA_dt"] >= today)
-        ]
-        
+        ]        
         if not in_progress.empty:
             st.markdown(f"### ✅ Tâches actives au {today.strftime('%d/%m/%Y')}")
             display_cols = ["Priorité", "Projet", "Équipe", "Itération", "Début", "ETA", "Statut"]
@@ -473,5 +475,6 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
 
