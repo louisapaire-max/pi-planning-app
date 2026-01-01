@@ -23,14 +23,19 @@ iterations = [
 # ÉQUIPES PAR DÉFAUT
 # =========================
 default_teams = [
+    "Product Owner",
     "Product unit",
+    "QQE",
+    "Marketing",
+    "Design",
+    "Webmaster",
     "Dev Web Front",
     "Dev Web Back",
     "Dev Order",
-    "Webmaster",
-    "SEO",
     "Tracking",
-    "QA"
+    "SEO",
+    "QA",
+    "Traduction"
 ]
 
 # =========================
@@ -40,27 +45,27 @@ default_teams = [
 
 # Template de tâches Catalogue Delivery (sans équipe assignée par défaut)
 catalogue_tasks_template = [
-    {"Tâche": "Brief requester Delivery", "Équipe": "Product Owner", "Ordre": 1, "Charge": 1},
-    {"Tâche": "Catalogue Delivery", "Équipe": "Product unit", "Ordre": 2, "Charge": 2},
-    {"Tâche": "Contrat d'interface", "Équipe": "QOE", "Ordre": 3, "Charge": 1},
-    {"Tâche": "Content", "Équipe": "Marketing", "Ordre": 4, "Charge": 2},
-    {"Tâche": "Documentation Project", "Équipe": "Product Owner", "Ordre": 5, "Charge": 1},
-    {"Tâche": "Kick-off Digital", "Équipe": "Product Owner", "Ordre": 6, "Charge": 0.5},
-    {"Tâche": "Étude d'impact", "Équipe": "Product Owner", "Ordre": 7, "Charge": 2},
-    {"Tâche": "Maquettes/Wireframe", "Équipe": "Design", "Ordre": 8, "Charge": 3},
-    {"Tâche": "Rédaction US / Jira", "Équipe": "Product Owner", "Ordre": 9, "Charge": 2},
-    {"Tâche": "Refinement", "Équipe": "Product Owner", "Ordre": 10, "Charge": 1},
-    {"Tâche": "Integration OCMS", "Équipe": "Webmaster", "Ordre": 11, "Charge": 2},
-    {"Tâche": "Dev Website Front", "Équipe": "Dev Web Front", "Ordre": 12, "Charge": 5},
-    {"Tâche": "Dev Website Back", "Équipe": "Dev Web Back", "Ordre": 13, "Charge": 5},
-    {"Tâche": "Dev Order", "Équipe": "Dev Order", "Ordre": 14, "Charge": 3},
-    {"Tâche": "Tracking", "Équipe": "Tracking", "Ordre": 15, "Charge": 2},
-    {"Tâche": "check SEO", "Équipe": "SEO", "Ordre": 16, "Charge": 1},
-    {"Tâche": "QA & UAT (langue source)", "Équipe": "QA", "Ordre": 17, "Charge": 3},
-    {"Tâche": "Traduction", "Équipe": "Traduction", "Ordre": 18, "Charge": 2},
-    {"Tâche": "QA WW", "Équipe": "QA", "Ordre": 19, "Charge": 2},
-    {"Tâche": "Plan de Production", "Équipe": "Product Owner", "Ordre": 20, "Charge": 1},
-    {"Tâche": "PROD", "Équipe": "Product Owner", "Ordre": 21, "Charge": 1},
+    {"Tache": "Brief requester Delivery", "Equipe": "Product Owner", "Ordre": 1, "Charge": 1},
+    {"Tache": "Catalogue Delivery", "Equipe": "Product unit", "Ordre": 2, "Charge": 2},
+    {"Tache": "Control d'interface", "Equipe": "QQE", "Ordre": 3, "Charge": 1},
+    {"Tache": "Content", "Equipe": "Marketing", "Ordre": 4, "Charge": 2},
+    {"Tache": "Documentation Project", "Equipe": "Product Owner", "Ordre": 5, "Charge": 1},
+    {"Tache": "Kick-off Digital", "Equipe": "Product Owner", "Ordre": 6, "Charge": 0.5},
+    {"Tache": "Etude d'impact", "Equipe": "Product Owner", "Ordre": 7, "Charge": 2},
+    {"Tache": "Maquettes/Wireframe", "Equipe": "Design", "Ordre": 8, "Charge": 3},
+    {"Tache": "Redaction US / Jira", "Equipe": "Product Owner", "Ordre": 9, "Charge": 2},
+    {"Tache": "Refinement", "Equipe": "Product Owner", "Ordre": 10, "Charge": 1},
+    {"Tache": "Integration OCMS", "Equipe": "Webmaster", "Ordre": 11, "Charge": 2},
+    {"Tache": "Dev Website Front", "Equipe": "Dev Web Front", "Ordre": 12, "Charge": 5},
+    {"Tache": "Dev Website Back", "Equipe": "Dev Web Back", "Ordre": 13, "Charge": 5},
+    {"Tache": "Dev Order", "Equipe": "Dev Order", "Ordre": 14, "Charge": 3},
+    {"Tache": "Tracking", "Equipe": "Tracking", "Ordre": 15, "Charge": 2},
+    {"Tache": "check SEO", "Equipe": "SEO", "Ordre": 16, "Charge": 1},
+    {"Tache": "QA & UAT (langue source)", "Equipe": "QA", "Ordre": 17, "Charge": 3},
+    {"Tache": "Traduction", "Equipe": "Traduction", "Ordre": 18, "Charge": 2},
+    {"Tache": "QA WW", "Equipe": "QA", "Ordre": 19, "Charge": 2},
+    {"Tache": "Plan de Production", "Equipe": "Product Owner", "Ordre": 20, "Charge": 1},
+    {"Tache": "PROD", "Equipe": "Product Owner", "Ordre": 21, "Charge": 1},
 ]
 # Liste des projets
 projects = [
@@ -552,6 +557,7 @@ with tab3:
         
         if holidays_info:
             st.dataframe(pd.DataFrame(holidays_info), use_container_width=True, hide_index=True)
+
 
 
 
