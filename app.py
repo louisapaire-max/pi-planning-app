@@ -155,6 +155,7 @@ with tab1:
         st.metric("Projet le plus gros", projet_max[:30] + "...", f"{charge_par_projet[projet_max]:.1f} j")
 
 with tab2:
+    
     st.subheader("Planning et Diagramme de Gantt")
     st.info("🚧 Section en cours de développement - Affichera le planning détaillé et le Gantt")
 
@@ -435,6 +436,7 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
 
 
