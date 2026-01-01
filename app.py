@@ -4,6 +4,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import numpy as np
 import streamlit_shadcn_ui as ui
+from workalendar.europe import France
 
 st.set_page_config(page_title="PI Planning", layout="wide")
 st.title("PI Planning - Capacity Planning avec ETA")
@@ -90,8 +91,7 @@ projects_names = [p["Projet"] for p in projects]
 
 st.header("📊 PI Planning - Sizing des Projets")
 
-tab1, tab2 = st.tabs(["Sizing Projets", "Planning & Gantt"])
-
+tab1, tab2, tab3 = st.tabs(["Sizing Projets", "Affectation Tâches", "Gantt"])
 with tab1:
     st.subheader("Matrice de Sizing: Projets x Équipes")
     st.markdown("Renseignez la charge de travail (en jours) pour chaque combinaison projet/équipe")
@@ -436,6 +436,124 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
+with tab3:
+    st.subheader("📅 Diagramme de Gantt - Vue Itérations")
+    
+    # Créer le calendrier français pour les jours fériés
+    cal = France()
+    
+    # Calculer la période totale (toutes les itérations)
+    all_dates = []
+    for iteration in iterations:
+        start = pd.to_datetime(iteration["start"])
+        end = pd.to_datetime(iteration["end"])
+        all_dates.extend([start, end])
+    
+    period_start = min(all_dates)
+    period_end = max(all_dates)
+    
+    # Générer tous les jours ouvrables (sans weekends)
+    all_days = pd.date_range(period_start, period_end, freq='D')
+    working_days = [d for d in all_days if d.weekday() < 5]  # Lun-Ven uniquement
+    
+    # Identifier les jours fériés français
+    holidays = []
+    for year in range(period_start.year, period_end.year + 1):
+        year_holidays = cal.holidays(year)
+        for holiday_date, holiday_name in year_holidays:
+            if period_start <= pd.Timestamp(holiday_date) <= period_end:
+                holidays.append(pd.Timestamp(holiday_date))
+    
+    # Créer le diagramme de Gantt avec plotly
+    import plotly.figure_factory as ff
+    import plotly.graph_objects as go
+    
+    # Préparer les données du Gantt (itérations)
+    gantt_data = []
+    for iteration in iterations:
+        gantt_data.append(dict(
+            Task=iteration["name"],
+            Start=iteration["start"],
+            Finish=iteration["end"],
+            Resource="Itération"
+        ))
+    
+    # Créer le Gantt
+    fig = ff.create_gantt(
+        gantt_data,
+        colors={'Itération': 'rgb(46, 137, 205)'},
+        index_col='Resource',
+        show_colorbar=True,
+        group_tasks=True,
+        showgrid_x=True,
+        showgrid_y=True
+    )
+    
+    # Ajouter des marqueurs pour les jours fériés
+    for holiday in holidays:
+        fig.add_vline(
+            x=holiday,
+            line_width=2,
+            line_dash="dash",
+            line_color="red",
+            opacity=0.3
+        )
+    
+    # Ajouter des marqueurs pour les weekends
+    for day in all_days:
+        if day.weekday() >= 5:  # Samedi ou Dimanche
+            fig.add_vrect(
+                x0=day,
+                x1=day + pd.Timedelta(days=1),
+                fillcolor="gray",
+                opacity=0.1,
+                layer="below",
+                line_width=0
+            )
+    
+    # Personnaliser le layout
+    fig.update_layout(
+        title="Planning des Itérations (Jours ouvrables uniquement)",
+        xaxis_title="Date",
+        yaxis_title="Itérations",
+        height=400,
+        xaxis=dict(
+            tickformat="%d/%m",
+            dtick=86400000.0,  # 1 jour en millisecondes
+            tickangle=-45
+        )
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Légende
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("🟦 **Bleu**: Itérations")
+    with col2:
+        st.markdown("🔴 **Rouge (pointillé)**: Jours fériés")
+    with col3:
+        st.markdown("⬜ **Gris**: Weekends")
+    
+    # Afficher la liste des jours fériés dans la période
+    if holidays:
+        st.markdown("---")
+        st.subheader("🇯🇷 Jours fériés français sur la période")
+        holidays_info = []
+        for year in range(period_start.year, period_end.year + 1):
+            year_holidays = cal.holidays(year)
+            for holiday_date, holiday_name in year_holidays:
+                if period_start <= pd.Timestamp(holiday_date) <= period_end:
+                    holidays_info.append({
+                        "Date": holiday_date.strftime("%d/%m/%Y"),
+                        "Jour": holiday_name
+                    })
+        
+        if holidays_info:
+            st.dataframe(pd.DataFrame(holidays_info), use_container_width=True, hide_index=True)
+
+
 
 
 
