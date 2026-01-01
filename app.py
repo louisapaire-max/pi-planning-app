@@ -339,38 +339,103 @@ with tab3:
     with col4:
         coverage = (len(placed) / len(df_plan) * 100) if len(df_plan) > 0 else 0
         st.metric("📊 Couverture", f"{coverage:.0f}%")
-    
-    st.divider()
-    
-    st.markdown("**Détail du planning**")
-    display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge", "Statut"]
-    st.dataframe(
-        df_plan[display_cols].sort_values("Priorité"),
-        use_container_width=True,
-        hide_index=True,
-        height=400
+            
+    # Sélection du projet
+    selected_project = st.selectbox(
+        "Sélectionner un projet",
+        options=[p["Projet"] for p in projects],
+        key="selected_project_planning"
     )
     
-    if not blocked.empty:
-        st.divider()
-        st.warning(f"⚠️ **{len(blocked)} tâches en dépassement de capacité**")
-        st.dataframe(
-            blocked[["Priorité", "Projet", "Tâche", "Équipe", "Charge"]].sort_values("Priorité"),
-            use_container_width=True,
-            hide_index=True
-        )
-    
     st.divider()
     
-    st.markdown("**📉 Capacité restante après planification**")
-    remaining_data = {}
-    for team in TEAMS:
-        remaining_data[team] = [remaining[(team, it["name"])] for it in ITERATIONS]
+    # Récupérer les tâches du projet sélectionné
+    project_data = next((p for p in projects if p["Projet"] == selected_project), None)
     
-    df_remaining = pd.DataFrame(remaining_data, index=[it["name"] for it in ITERATIONS]).T
-    st.dataframe(df_remaining.style.applymap(highlight_low), use_container_width=True)
-
-# ═════════════════════════════════════════════════════════════════════
+    if project_data:
+        st.subheader(f"📊 Planning: {selected_project}")
+        
+        # Informations du projet
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("🎯 Priorité", project_data["Priorité"])
+        with col2:
+            st.metric("📊 Statut", project_data["Statut"])
+        
+        st.divider()
+        
+        # Récupérer ou créer les tâches du projet
+        if "project_tasks" not in st.session_state:
+            st.session_state.project_tasks = {}
+        
+        if selected_project not in st.session_state.project_tasks:
+            # Initialiser avec le template
+            st.session_state.project_tasks[selected_project] = [
+                {
+                    "Tâche": task["Tâche"],
+                    "Équipe": task["Équipe"],
+                    "Charge": task["Charge"],
+                    "Statut": "Backlog"  # Statut par défaut
+                }
+                for task in catalogue_tasks_template
+            ]
+        
+        # Tableau éditable des tâches
+        tasks_df = pd.DataFrame(st.session_state.project_tasks[selected_project])
+        
+        st.markdown("### 📋 Tâches du projet")
+        st.info("💡 Modifiez le statut des tâches directement dans le tableau")
+        
+        # Utiliser data_editor pour permettre l'édition
+        edited_tasks = st.data_editor(
+            tasks_df,
+            column_config={
+                "Tâche": st.column_config.TextColumn(
+                    "Tâche",
+                    width="large",
+                    disabled=True
+                ),
+                "Équipe": st.column_config.TextColumn(
+                    "Équipe",
+                    width="medium",
+                    disabled=True
+                ),
+                "Charge": st.column_config.NumberColumn(
+                    "Charge (j)",
+                    width="small",
+                    disabled=True
+                ),
+                "Statut": st.column_config.SelectboxColumn(
+                    "Statut",
+                    options=["Backlog", "En cours", "Terminé", "Bloqué"],
+                    width="medium",
+                    required=True
+                )
+            },
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed"
+        )
+        
+        # Mettre à jour le state avec les modifications
+        st.session_state.project_tasks[selected_project] = edited_tasks.to_dict('records')
+        
+        # Statistiques des statuts
+        st.divider()
+        st.markdown("### 📊 Statistiques")
+        
+        status_counts = edited_tasks["Statut"].value_counts()
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("📝 Backlog", status_counts.get("Backlog", 0))
+        with col2:
+            st.metric("⏳ En cours", status_counts.get("En cours", 0))
+        with col3:
+            st.metric("✅ Terminé", status_counts.get("Terminé", 0))
+        with col4:
+            st.metric("❌ Bloqué", status_counts.get("Bloqué", 0))
+    
 # TAB 4: TIMELINE (Gantt simplifié)
 # ═════════════════════════════════════════════════════════════════════
 with tab4:
@@ -460,3 +525,4 @@ with tab5:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v2.2** | Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
