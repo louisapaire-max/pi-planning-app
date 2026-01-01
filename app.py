@@ -91,7 +91,8 @@ projects_names = [p["Projet"] for p in projects]
 
 st.header("📊 PI Planning - Sizing des Projets")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Sizing Projets", "Affectation Tâches", "Gantt", "Projet"])with tab1:
+tab1, tab2, tab3, tab4 = st.tabs(["Sizing Projets", "Affectation Tâches", "Gantt", "Projet"])
+with tab1:
     st.subheader("Matrice de Sizing: Projets x Équipes")
     st.markdown("Renseignez la charge de travail (en jours) pour chaque combinaison projet/équipe")
     
@@ -551,6 +552,7 @@ with tab3:
         
         if holidays_info:
             st.dataframe(pd.DataFrame(holidays_info), use_container_width=True, hide_index=True)
+
 
 
 
