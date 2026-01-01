@@ -1,0 +1,8 @@
+streamlit
+pandas
+plotly
+networkx
+
+git add .
+git commit -m "Add requirements"
+git push
