@@ -3,9 +3,129 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 import numpy as np
+import streamlit_shadcn_ui as ui
 
 st.set_page_config(page_title="PI Planning", layout="wide")
 st.title("PI Planning - Capacity Planning avec ETA")
+
+# =========================
+# GLASSMORPHISM THEME
+# =========================
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Background gradient */
+    .stApp {
+        background: linear-gradient(135deg, #1e3a8a 0%, #312e81 50%, #1e1b4b 100%);
+        background-attachment: fixed;
+    }
+    
+    /* Glass effect for main containers */
+    div[data-testid="stVerticalBlock"] > div {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+        padding: 25px !important;
+        margin: 15px 0 !important;
+    }
+    
+    /* Tabs glassmorphism */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 8px;
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 10px;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 500;
+        padding: 12px 24px;
+        transition: all 0.3s ease;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: rgba(255, 255, 255, 0.15) !important;
+        backdrop-filter: blur(8px);
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Title styling */
+    h1, h2, h3 {
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Buttons glassmorphism */
+    .stButton button {
+        background: rgba(255, 255, 255, 0.12) !important;
+        backdrop-filter: blur(8px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+        color: white !important;
+        font-weight: 500 !important;
+        padding: 12px 24px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+    }
+    
+    .stButton button:hover {
+        background: rgba(255, 255, 255, 0.2) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    /* Inputs glassmorphism */
+    .stTextInput input, .stNumberInput input, .stSelectbox select {
+        background: rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 10px !important;
+        color: white !important;
+        padding: 10px 15px !important;
+    }
+    
+    /* DataFrames glassmorphism */
+    .stDataFrame {
+        background: rgba(255, 255, 255, 0.05) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 15px !important;
+        overflow: hidden;
+    }
+    
+    /* Metrics cards */
+    div[data-testid="stMetricValue"] {
+        color: white !important;
+        font-size: 28px !important;
+        font-weight: 600 !important;
+    }
+    
+    div[data-testid="stMetricLabel"] {
+        color: rgba(255, 255, 255, 0.7) !important;
+    }
+    
+    /* Info boxes */
+    .stAlert {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+        color: white !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
 # ITÉRATIONS
@@ -353,4 +473,5 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
