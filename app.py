@@ -326,7 +326,7 @@ with tab4:
     
     if planning:
         df_planning = pd.DataFrame(planning)
-        today = datetime.now().date()
+        today = pd.Timestamp.now().normalize()
         
         # Filtrer les tâches en cours
         # Filtrer les tâches en cours (ignorer les erreurs de conversion de date)
@@ -356,6 +356,7 @@ with tab4:
             st.info("Aucune tâche en cours pour la date du jour.")
     else:
         st.warning("Aucun planning disponible.")
+
 
 
 
