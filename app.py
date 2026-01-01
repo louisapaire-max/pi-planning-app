@@ -23,6 +23,8 @@ sprints = [
 # =============================
 if "teams" not in st.session_state:
     st.session_state.teams = {}
+if "tasks" not in st.session_state:
+    st.session_state.tasks = []
 
 # =============================
 # SIDEBAR – GESTION DES ÉQUIPES
@@ -88,16 +90,49 @@ if cap_rows:
 else:
     st.info("Ajoute des équipes et des développeurs pour voir les capacités.")
 
+
+st.header("Backlog – Ajouter un projet")
+
+if st.session_state.teams:
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        project_name = st.text_input("Nom du projet")
+
+    with col2:
+        project_team = st.selectbox(
+            "Équipe",
+            list(st.session_state.teams.keys())
+        )
+
+    with col3:
+        project_load = st.number_input("Charge (jours)", 1.0, 100.0, 5.0)
+
+    with col4:
+        project_priority = st.number_input("Priorité", 1, 100, 1)
+
+    if st.button("Ajouter le projet"):
+        st.session_state.tasks.append({
+            "Projet": project_name,
+            "Équipe": project_team,
+            "load": project_load,
+            "priority": project_priority
+        })
+else:
+    st.info("Ajoute d'abord des équipes pour créer des projets.")
+
+st.header("Backlog actuel")
+
+if st.session_state.tasks:
+    df_backlog = pd.DataFrame(st.session_state.tasks).sort_values("priority")
+    st.dataframe(df_backlog, use_container_width=True)
+else:
+    st.info("Aucun projet dans le backlog.")
+
 # =============================
 # BACKLOG
 # =============================
-tasks = [
-    {"Projet": "Email - Add File Edition to Zimbra Pro", "Équipe": "InT", "load": 6, "priority": 1},
-    {"Projet": "Website Revamp - homepage telephony", "Équipe": "Dev Web Front", "load": 8, "priority": 2},
-    {"Projet": "VPS - Add more choice on Disk options", "Équipe": "Dev Web Back", "load": 5, "priority": 3},
-    {"Projet": "Zimbra add yearly commitment prod", "Équipe": "InT", "load": 4, "priority": 4},
-    {"Projet": "Telco - Create new plans for Trunk product", "Équipe": "Order React", "load": 7, "priority": 5},
-]
+
 
 # =============================
 # PLANIFICATION AUTOMATIQUE
@@ -105,7 +140,7 @@ tasks = [
 planning = []
 remaining_capacity = capacity.copy()
 
-for task in sorted(tasks, key=lambda x: x["priority"]):
+for task in sorted(st.session_state.tasks, key=lambda x: x["priority"]):
     for sprint in sprints:
         key = (task["Équipe"], sprint["name"])
         if remaining_capacity.get(key, 0) >= task["load"]:
@@ -127,3 +162,4 @@ if planning:
     st.dataframe(pd.DataFrame(planning), use_container_width=True)
 else:
     st.warning("Impossible de planifier : capacités insuffisantes ou équipes manquantes.")
+
