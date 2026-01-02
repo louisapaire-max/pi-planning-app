@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import json
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v7.8", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v7.9", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -156,7 +156,7 @@ def export_data():
                 overrides_export[key][k] = v
     
     data = {
-        "version": "7.8",
+        "version": "7.9",
         "export_date": datetime.now().isoformat(),
         "tasks_config": st.session_state.tasks_config,
         "projects_tasks": st.session_state.projects_tasks,
@@ -236,7 +236,7 @@ with st.sidebar:
             st.error(message)
     
     st.divider()
-    st.caption(f"Version 7.8 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    st.caption(f"Version 7.9 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FONCTIONS
@@ -487,44 +487,23 @@ def get_tasks_for_period(start_date, end_date):
     
     return df_plan[mask].copy()
 
-def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
-    """Crée un Gantt pour un projet individuel avec toutes les dates visibles"""
+def create_gantt_chart(df_gantt, title="Gantt Chart"):
+    """Crée un Gantt chart uniformisé (utilisé partout)"""
     if df_gantt.empty:
         return None
     
-    today = pd.to_datetime(datetime.now().date())
-    df_gantt["Statut_Tâche"] = df_gantt["End Date"].apply(
-        lambda x: "✅ Terminée" if pd.to_datetime(x) < today else "⏳ En cours / À venir"
+    # Créer le graphique avec px.timeline
+    fig = px.timeline(
+        df_gantt, 
+        x_start="Start Date", 
+        x_end="End Date", 
+        y="Tâche",
+        color="Équipe",
+        color_discrete_map=TEAM_COLORS,
+        hover_data=["Équipe", "Charge", "Dépendance"],
+        title=title,
+        height=max(600, len(df_gantt) * 40)
     )
-    
-    fig = go.Figure()
-    
-    for idx, row in df_gantt.iterrows():
-        if row["Statut_Tâche"] == "✅ Terminée":
-            color = "#28A745"
-        else:
-            color = TEAM_COLORS.get(row["Équipe"], "#999999")
-        
-        duration = row["End Date"] - row["Start Date"]
-        
-        fig.add_trace(go.Bar(
-            x=[duration],
-            y=[row["Tâche"]],
-            base=row["Start Date"],
-            orientation='h',
-            marker=dict(color=color),
-            name=row["Équipe"],
-            showlegend=False,
-            hovertemplate=(
-                f"<b>{row['Tâche']}</b><br>" +
-                f"Équipe: {row['Équipe']}<br>" +
-                f"Charge: {row['Charge']}j<br>" +
-                f"Début: {row['Start Date'].strftime('%d/%m/%Y (%a)')}<br>" +
-                f"Fin: {row['End Date'].strftime('%d/%m/%Y (%a)')}<br>" +
-                f"Dépendance: {row.get('Dépendance', 'Aucune')}<br>" +
-                f"Statut: {row['Statut_Tâche']}<extra></extra>"
-            )
-        ))
     
     # Bandes de couleur pour les itérations
     colors_bg = ["rgba(230, 230, 230, 0.3)", "rgba(200, 230, 255, 0.3)", "rgba(220, 255, 220, 0.3)", "rgba(255, 220, 220, 0.3)", "rgba(220, 255, 255, 0.3)"]
@@ -547,11 +526,7 @@ def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
         fig.add_vrect(
             x0=start_hol, x1=end_hol,
             fillcolor="rgba(255, 0, 0, 0.2)",
-            line_width=0,
-            annotation_text="Férié",
-            annotation_position="bottom right",
-            annotation_font_color="red",
-            annotation_font_size=9
+            line_width=0
         )
     
     # Ligne du jour actuel
@@ -579,112 +554,33 @@ def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
     first_iteration_start = ITERATIONS[0]["start"]
     last_iteration_end = ITERATIONS[-1]["end"]
     
-    # Calcul de TOUS les jours ouvrables pour l'axe X
-    start_dt = pd.to_datetime(first_iteration_start)
-    end_dt = pd.to_datetime(last_iteration_end)
-    all_dates = pd.date_range(start=start_dt, end=end_dt, freq='D')
-    weekdays = [d for d in all_dates if d.weekday() < 5]  # Lundi à vendredi
-    
+    # Configuration de l'axe X avec tous les jours
     fig.update_xaxes(
         range=[first_iteration_start, last_iteration_end],
-        tickmode='array',
-        tickvals=weekdays,
-        ticktext=[d.strftime('%a<br>%d/%m') for d in weekdays],
-        tickangle=-90,
+        tickformat="%a %d/%m",
+        dtick=86400000.0,  # 1 jour
         side="top",
-        tickfont=dict(size=8),
+        tickfont=dict(size=9),
+        tickangle=-90,
         showgrid=True,
         gridwidth=1,
         gridcolor='LightGray',
-        dtick=86400000.0
+        rangebreaks=[dict(bounds=["sat", "mon"])]  # Masque les weekends
     )
     
     fig.update_yaxes(autorange="reversed", tickfont=dict(size=11))
     fig.update_layout(
-        title=dict(text=title, font=dict(size=16)),
-        height=max(600, len(df_gantt) * 50),
-        showlegend=False,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
         margin=dict(t=150, b=50, l=250, r=50),
         plot_bgcolor='white'
     )
-    
-    return fig
-
-def create_gantt_chart_global(df_gantt, title="Gantt Chart"):
-    """Crée un Gantt global avec toutes les tâches"""
-    if df_gantt.empty:
-        return None
-    
-    fig = px.timeline(
-        df_gantt, 
-        x_start="Start Date", 
-        x_end="End Date", 
-        y="Tâche_Projet",
-        color="Équipe",
-        color_discrete_map=TEAM_COLORS,
-        hover_data=["Projet", "Équipe", "Charge", "Dépendance"],
-        title=title,
-        height=max(600, len(df_gantt) * 30)
-    )
-    
-    colors_bg = ["rgba(230, 230, 230, 0.3)", "rgba(200, 230, 255, 0.3)", "rgba(220, 255, 220, 0.3)", "rgba(255, 220, 220, 0.3)", "rgba(220, 255, 255, 0.3)"]
-    for i, it in enumerate(ITERATIONS):
-        fig.add_vrect(
-            x0=it["start"], x1=it["end"],
-            fillcolor=colors_bg[i % len(colors_bg)], 
-            layer="below", line_width=0,
-            annotation_text=f"<b>{it['name']}</b>", 
-            annotation_position="top left",
-            annotation_font_size=13
-        )
-        fig.add_vline(x=it["end"], line_width=2, line_dash="dot", line_color="gray")
-    
-    for hol_date in HOLIDAYS_2026:
-        start_hol = pd.to_datetime(hol_date)
-        end_hol = start_hol + timedelta(days=1)
-        fig.add_vrect(
-            x0=start_hol, x1=end_hol,
-            fillcolor="rgba(255, 0, 0, 0.2)",
-            line_width=0,
-            annotation_text="Férié",
-            annotation_position="bottom right",
-            annotation_font_color="red",
-            annotation_font_size=10
-        )
-    
-    today_str = datetime.now().date().isoformat()
-    fig.add_shape(
-        type="line",
-        x0=today_str,
-        x1=today_str,
-        y0=0,
-        y1=1,
-        yref="paper",
-        line=dict(color="red", width=3, dash="solid")
-    )
-    
-    fig.add_annotation(
-        x=today_str,
-        y=1,
-        yref="paper",
-        text="📍 AUJOURD'HUI",
-        showarrow=False,
-        yshift=10,
-        font=dict(size=12, color="red")
-    )
-
-    first_iteration_start = ITERATIONS[0]["start"]
-    last_iteration_end = ITERATIONS[-1]["end"]
-    
-    fig.update_xaxes(
-        range=[first_iteration_start, last_iteration_end],
-        tickformat="%a %d/%m",
-        dtick=86400000.0,
-        side="top",
-        tickfont=dict(size=11),
-        rangebreaks=[dict(bounds=["sat", "mon"])]
-    )
-    fig.update_yaxes(autorange="reversed")
     
     return fig
 
@@ -735,7 +631,7 @@ with tab_projects:
                     "Tâche": task["name"],
                     "Équipe": task["team"],
                     "Charge": charge,
-                    "Dépendance": depends,
+                    "Dépendance": depends if depends else "Aucune",
                     "Start Date": start_dt,
                     "End Date": end_dt
                 })
@@ -751,7 +647,7 @@ with tab_projects:
                         "Tâche": custom_task_name,
                         "Équipe": custom_task.get("team", "N/A"),
                         "Charge": custom_task.get("charge", 1),
-                        "Dépendance": custom_task.get("depends_on", None),
+                        "Dépendance": custom_task.get("depends_on", "Aucune") if custom_task.get("depends_on") else "Aucune",
                         "Start Date": start_dt,
                         "End Date": end_dt
                     })
@@ -759,7 +655,7 @@ with tab_projects:
         df_project_gantt = pd.DataFrame(project_gantt_data)
         
         if not df_project_gantt.empty:
-            fig_gantt = create_gantt_chart_project(df_project_gantt, title=f"📅 Gantt: {selected_proj}")
+            fig_gantt = create_gantt_chart(df_project_gantt, title=f"📅 Gantt: {selected_proj}")
             if fig_gantt:
                 st.plotly_chart(fig_gantt, use_container_width=True)
         else:
@@ -853,4 +749,512 @@ with tab_projects:
             }
         )
         
-        d
+        dates_changed = False
+        validation_errors = []
+        
+        for idx, row in edited_config.iterrows():
+            task_name = row["Tâche"]
+            
+            if task_name in task_order:
+                override_key = f"{selected_proj}_{task_name}"
+                
+                if task_name in task_dates_dict:
+                    original_start_dt, original_end_dt = task_dates_dict[task_name]
+                    original_start = original_start_dt.date()
+                    original_end = original_end_dt.date()
+                else:
+                    original_start = date(2026, 1, 12)
+                    original_end = date(2026, 1, 12)
+                
+                if task_name in st.session_state.tasks_config:
+                    original_task = st.session_state.tasks_config[task_name]
+                    original_charge = original_task["charge"]
+                    original_depends = original_task["depends_on"]
+                else:
+                    if task_name in st.session_state.custom_tasks:
+                        original_charge = st.session_state.custom_tasks[task_name]["charge"]
+                        original_depends = st.session_state.custom_tasks[task_name].get("depends_on")
+                    else:
+                        original_charge = 1
+                        original_depends = None
+                
+                new_charge = row["Charge (j)"]
+                new_depends = None if row["Dépend de"] == "(Aucune)" else row["Dépend de"]
+                new_start = row["Début"]
+                new_end = row["Fin"]
+                
+                # VALIDATION WEEKEND
+                if is_weekend(new_start):
+                    validation_errors.append(
+                        f"❌ **{task_name}** : La date de début ({new_start.strftime('%d/%m/%Y')}) est un weekend. "
+                        f"Veuillez sélectionner un jour ouvrable (lundi-vendredi)."
+                    )
+                    continue
+                
+                if is_weekend(new_end):
+                    validation_errors.append(
+                        f"❌ **{task_name}** : La date de fin ({new_end.strftime('%d/%m/%Y')}) est un weekend. "
+                        f"Veuillez sélectionner un jour ouvrable (lundi-vendredi)."
+                    )
+                    continue
+                
+                # VALIDATION DES DÉPENDANCES
+                if new_depends and new_depends in task_dates_dict:
+                    parent_start, parent_end = task_dates_dict[new_depends]
+                    parent_end_date = parent_end.date()
+                    
+                    if new_start <= parent_end_date:
+                        validation_errors.append(
+                            f"❌ **{task_name}** : La date de début ({new_start.strftime('%d/%m/%Y')}) "
+                            f"ne peut pas être avant ou égale à la fin de '{new_depends}' ({parent_end_date.strftime('%d/%m/%Y')}). "
+                            f"Date minimum autorisée : {get_next_weekday(parent_end_date + timedelta(days=1)).strftime('%d/%m/%Y')}"
+                        )
+                        continue
+                
+                if override_key not in st.session_state.project_task_overrides:
+                    st.session_state.project_task_overrides[override_key] = {}
+                
+                if new_charge != original_charge or new_depends != original_depends:
+                    st.session_state.project_task_overrides[override_key]["charge"] = new_charge
+                    st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
+                
+                if new_start != original_start or new_end != original_end:
+                    st.session_state.project_task_overrides[override_key]["start_date"] = new_start
+                    st.session_state.project_task_overrides[override_key]["end_date"] = new_end
+                    dates_changed = True
+        
+        if validation_errors:
+            st.error("### ⚠️ Erreurs de validation")
+            for error in validation_errors:
+                st.warning(error)
+            st.info("💡 **Règles** : Pas de weekend | Une tâche doit commencer après la fin de sa dépendance")
+        
+        if dates_changed and not validation_errors:
+            st.rerun()
+        
+        tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
+        
+        if tasks_to_delete:
+            st.warning(f"⚠️ {len(tasks_to_delete)} tâche(s) sélectionnée(s) pour suppression : {', '.join(tasks_to_delete)}")
+            
+            if st.button("🗑️ Supprimer les tâches cochées", type="primary", key=f"btn_delete_checked_{selected_proj}"):
+                for task_name in tasks_to_delete:
+                    custom_tasks = st.session_state.projects_tasks[selected_proj].get("custom", [])
+                    default_tasks = st.session_state.projects_tasks[selected_proj].get("default", [])
+                    
+                    if task_name in custom_tasks:
+                        st.session_state.projects_tasks[selected_proj]["custom"].remove(task_name)
+                    elif task_name in default_tasks:
+                        st.session_state.projects_tasks[selected_proj]["default"].remove(task_name)
+                
+                st.success(f"✅ {len(tasks_to_delete)} tâche(s) supprimée(s) !")
+                st.rerun()
+        
+        st.divider()
+        
+        st.markdown("**➕ Ajouter une Tâche Template**")
+        
+        all_task_names = [t["name"] for t in get_tasks_list()]
+        available_tasks = [t for t in all_task_names if t not in all_project_tasks]
+        
+        if available_tasks:
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                new_task = st.selectbox("Sélectionner une tâche template", options=available_tasks, key=f"add_default_task_{selected_proj}")
+            
+            with col2:
+                if st.button("➕ Ajouter", key=f"btn_add_default_{selected_proj}"):
+                    st.session_state.projects_tasks[selected_proj]["default"].append(new_task)
+                    st.success(f"✅ Tâche '{new_task}' ajoutée !")
+                    st.rerun()
+        else:
+            st.info("✅ Toutes les tâches template sont déjà assignées à ce projet.")
+        
+        st.divider()
+        
+        st.markdown("**➕ Créer une Tâche Personnalisée**")
+        
+        col_name, col_team, col_charge = st.columns(3)
+        
+        with col_name:
+            new_task_name = st.text_input("📝 Nom de la tâche", placeholder="Ex: Migration BDD", key=f"new_task_name_{selected_proj}")
+        
+        with col_team:
+            new_task_team = st.selectbox("👥 Équipe responsable", options=TEAMS, key=f"new_task_team_{selected_proj}")
+        
+        with col_charge:
+            new_task_charge = st.number_input("📅 Charge (jours)", min_value=0.5, max_value=20.0, step=0.5, value=1.0, key=f"new_task_charge_{selected_proj}")
+        
+        col_dep = st.columns(1)[0]
+        
+        with col_dep:
+            dep_options = ["(Aucune)"] + get_all_tasks_for_project(selected_proj)
+            new_task_dep = st.selectbox("🔗 Dépendance", options=dep_options, key=f"new_task_dep_{selected_proj}")
+        
+        if st.button("➕ Créer la tâche personnalisée", key=f"btn_create_custom_{selected_proj}"):
+            if new_task_name:
+                st.session_state.custom_tasks[new_task_name] = {
+                    "team": new_task_team,
+                    "charge": new_task_charge,
+                    "start_date": ITERATIONS[0]["start"],
+                    "depends_on": None if new_task_dep == "(Aucune)" else new_task_dep
+                }
+                
+                st.session_state.projects_tasks[selected_proj]["custom"].append(new_task_name)
+                st.success(f"✅ Tâche personnalisée '{new_task_name}' créée !")
+                st.rerun()
+            else:
+                st.error("❌ Veuillez entrer un nom de tâche")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 1: VUE GLOBALE PLANNING
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_planning:
+    st.subheader("📋 Vue Globale du Planning")
+    st.info("📊 Vue d'ensemble de toutes les tâches de tous les projets")
+    
+    if not df_plan.empty:
+        df_plan["Start Date"] = pd.to_datetime(df_plan["Début"], errors='coerce')
+        df_plan["End Date"] = pd.to_datetime(df_plan["Fin"], errors='coerce')
+        
+        st.markdown("### 🔍 Filtres")
+        
+        col_filter1, col_filter2, col_filter3 = st.columns(3)
+        
+        with col_filter1:
+            all_projects = ["Tous"] + sorted(df_plan["Projet"].unique().tolist())
+            selected_projects = st.multiselect(
+                "📂 Projets",
+                options=all_projects,
+                default=["Tous"],
+                key="filter_projects"
+            )
+        
+        with col_filter2:
+            all_teams = ["Toutes"] + sorted(df_plan["Équipe"].unique().tolist())
+            selected_teams = st.multiselect(
+                "👥 Équipes",
+                options=all_teams,
+                default=["Toutes"],
+                key="filter_teams"
+            )
+        
+        with col_filter3:
+            all_tasks = ["Toutes"] + sorted(df_plan["Tâche"].unique().tolist())
+            selected_tasks = st.multiselect(
+                "📋 Tâches",
+                options=all_tasks,
+                default=["Toutes"],
+                key="filter_tasks"
+            )
+        
+        if st.button("🔄 Réinitialiser les filtres", key="reset_filters"):
+            st.session_state.filter_projects = ["Tous"]
+            st.session_state.filter_teams = ["Toutes"]
+            st.session_state.filter_tasks = ["Toutes"]
+            st.rerun()
+        
+        st.divider()
+        
+        df_filtered = df_plan.copy()
+        
+        if "Tous" not in selected_projects and len(selected_projects) > 0:
+            df_filtered = df_filtered[df_filtered["Projet"].isin(selected_projects)]
+        
+        if "Toutes" not in selected_teams and len(selected_teams) > 0:
+            df_filtered = df_filtered[df_filtered["Équipe"].isin(selected_teams)]
+        
+        if "Toutes" not in selected_tasks and len(selected_tasks) > 0:
+            df_filtered = df_filtered[df_filtered["Tâche"].isin(selected_tasks)]
+        
+        if not df_filtered.empty:
+            st.divider()
+            
+            df_gantt_global = df_filtered.dropna(subset=["Start Date", "End Date"]).copy()
+            df_gantt_global["Tâche_Display"] = df_gantt_global["Tâche"] + " [" + df_gantt_global["Projet"].str[:30] + "]"
+            df_gantt_global = df_gantt_global.rename(columns={"Tâche_Display": "Tâche"})
+            
+            if not df_gantt_global.empty:
+                fig_global = create_gantt_chart(df_gantt_global, title="📅 Gantt Global - Vue Filtrée")
+                if fig_global:
+                    st.plotly_chart(fig_global, use_container_width=True)
+            else:
+                st.warning("Aucune tâche à afficher dans le Gantt avec ces filtres")
+            
+            st.divider()
+            
+            st.markdown("### 📊 Tableau détaillé")
+            
+            display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Charge", "Dépendance", "Statut"]
+            
+            col_sort1, col_sort2 = st.columns([2, 1])
+            
+            with col_sort1:
+                sort_by = st.selectbox(
+                    "Trier par",
+                    options=["Priorité", "Projet", "Équipe", "Début", "Charge"],
+                    index=0,
+                    key="sort_by_global"
+                )
+            
+            with col_sort2:
+                sort_order = st.selectbox(
+                    "Ordre",
+                    options=["Croissant", "Décroissant"],
+                    index=0,
+                    key="sort_order_global"
+                )
+            
+            ascending = True if sort_order == "Croissant" else False
+            df_sorted = df_filtered.sort_values(by=sort_by, ascending=ascending)
+            
+            st.dataframe(
+                df_sorted[display_cols],
+                use_container_width=True,
+                hide_index=True,
+                height=600
+            )
+            
+            st.divider()
+            
+            csv_data = df_sorted[display_cols].to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="📥 Télécharger le planning filtré (CSV)",
+                data=csv_data,
+                file_name=f"planning_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
+        else:
+            st.warning("❌ Aucune donnée ne correspond aux filtres sélectionnés")
+            st.info("💡 Astuce : Essayez de réinitialiser les filtres ou de sélectionner d'autres critères")
+    
+    else:
+        st.warning("Aucune donnée de planning disponible")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 2: AUJOURD'HUI & CETTE SEMAINE
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_today:
+    st.subheader("📅 Aujourd'hui & Cette semaine")
+    
+    today = datetime.now().date()
+    week_start, week_end = get_current_week_range()
+    
+    st.info(f"📆 **Aujourd'hui** : {today.strftime('%A %d %B %Y')} | **Semaine** : {week_start.strftime('%d/%m')} → {week_end.strftime('%d/%m/%Y')}")
+    
+    st.markdown("## 🔥 Tâches en cours aujourd'hui")
+    
+    df_today = get_tasks_for_period(today, today)
+    
+    if not df_today.empty:
+        projects_today = df_today.groupby("Projet")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📊 Projets actifs", len(projects_today))
+        with col2:
+            st.metric("📋 Tâches en cours", len(df_today))
+        with col3:
+            teams_active = df_today["Équipe"].nunique()
+            st.metric("👥 Équipes mobilisées", teams_active)
+        
+        st.divider()
+        
+        for project_name, tasks in projects_today:
+            with st.expander(f"**{project_name}**", expanded=True):
+                for idx, task in tasks.iterrows():
+                    team_color = TEAM_COLORS.get(task["Équipe"], "#999999")
+                    
+                    col_task, col_team, col_dates = st.columns([3, 2, 2])
+                    
+                    with col_task:
+                        st.markdown(f"**{task['Tâche']}**")
+                    
+                    with col_team:
+                        st.markdown(f"<span style='background-color: {team_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{task['Équipe']}</span>", unsafe_allow_html=True)
+                    
+                    with col_dates:
+                        st.caption(f"📅 {task['Début']} → {task['Fin']}")
+                
+                st.divider()
+    else:
+        st.warning("🎉 Aucune tâche en cours aujourd'hui !")
+    
+    st.divider()
+    
+    st.markdown("## 📆 Planning de la semaine")
+    
+    df_week = get_tasks_for_period(week_start, week_end)
+    
+    if not df_week.empty:
+        df_week = df_week.sort_values(["Priorité", "Start Date"])
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Projets actifs", df_week["Projet"].nunique())
+        with col2:
+            st.metric("📋 Tâches totales", len(df_week))
+        with col3:
+            charge_totale = df_week["Charge"].sum()
+            st.metric("⏱️ Charge totale", f"{charge_totale:.1f}j")
+        with col4:
+            teams_week = df_week["Équipe"].nunique()
+            st.metric("👥 Équipes", teams_week)
+        
+        st.divider()
+        
+        st.markdown("### 📋 Détail par projet")
+        
+        projects_week = df_week.groupby("Projet")
+        
+        for project_name, tasks in projects_week:
+            project_priority = tasks.iloc[0]["Priorité"]
+            
+            with st.expander(f"**[P{project_priority}] {project_name}** ({len(tasks)} tâche{'s' if len(tasks) > 1 else ''})", expanded=False):
+                tasks_sorted = tasks.sort_values("Start Date")
+                
+                table_data = []
+                for idx, task in tasks_sorted.iterrows():
+                    task_start = task["Start Date"].date()
+                    task_end = task["End Date"].date()
+                    
+                    if task_end < today:
+                        status = "✅ Terminée"
+                    elif task_start <= today <= task_end:
+                        status = "🔵 En cours"
+                    else:
+                        status = "⏳ À venir"
+                    
+                    table_data.append({
+                        "Statut": status,
+                        "Tâche": task["Tâche"],
+                        "Équipe": task["Équipe"],
+                        "Début": task_start.strftime("%d/%m"),
+                        "Fin": task_end.strftime("%d/%m"),
+                        "Charge": f"{task['Charge']}j"
+                    })
+                
+                df_table = pd.DataFrame(table_data)
+                
+                st.dataframe(
+                    df_table,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Statut": st.column_config.TextColumn("Statut", width="small"),
+                        "Tâche": st.column_config.TextColumn("Tâche", width="large"),
+                        "Équipe": st.column_config.TextColumn("Équipe", width="medium"),
+                        "Début": st.column_config.TextColumn("Début", width="small"),
+                        "Fin": st.column_config.TextColumn("Fin", width="small"),
+                        "Charge": st.column_config.TextColumn("Charge", width="small"),
+                    }
+                )
+                
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    terminées = len([t for t in table_data if t["Statut"] == "✅ Terminée"])
+                    st.caption(f"✅ Terminées : {terminées}")
+                with col_b:
+                    en_cours = len([t for t in table_data if t["Statut"] == "🔵 En cours"])
+                    st.caption(f"🔵 En cours : {en_cours}")
+                with col_c:
+                    a_venir = len([t for t in table_data if t["Statut"] == "⏳ À venir"])
+                    st.caption(f"⏳ À venir : {a_venir}")
+        
+        st.divider()
+        
+        st.markdown("### 👥 Charge par équipe cette semaine")
+        
+        team_workload = df_week.groupby("Équipe")["Charge"].sum().sort_values(ascending=False)
+        
+        col_teams = st.columns(min(4, len(team_workload)))
+        
+        for idx, (team, charge) in enumerate(team_workload.items()):
+            with col_teams[idx % len(col_teams)]:
+                team_color = TEAM_COLORS.get(team, "#999999")
+                st.markdown(
+                    f"<div style='background-color: {team_color}; color: white; padding: 10px; border-radius: 8px; text-align: center;'>"
+                    f"<strong>{team}</strong><br>{charge:.1f} jours</div>",
+                    unsafe_allow_html=True
+                )
+        
+    else:
+        st.warning("📭 Aucune tâche planifiée cette semaine")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 3: CAPACITÉS & RESSOURCES
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_capa:
+    st.subheader("📊 Capacités & Ressources")
+    
+    st.markdown("### 💼 Capacités Brutes (Jours)")
+    
+    capacity_data = {}
+    for team in TEAMS:
+        capacity_data[team] = []
+        for it in ITERATIONS:
+            key = (team, it["name"])
+            capacity_data[team].append(st.session_state.capacity[key])
+    
+    df_cap = pd.DataFrame(capacity_data, index=[it["name"] for it in ITERATIONS]).T
+    
+    edited_cap = st.data_editor(
+        df_cap,
+        use_container_width=True,
+        key="capacity_editor",
+        column_config={
+            it["name"]: st.column_config.NumberColumn(
+                it["name"], min_value=0, max_value=100, step=0.5, format="%.1f j"
+            ) for it in ITERATIONS
+        }
+    )
+    
+    for idx, team in enumerate(TEAMS):
+        for jdx, it in enumerate(ITERATIONS):
+            key = (team, it["name"])
+            st.session_state.capacity[key] = edited_cap.iloc[idx, jdx]
+    
+    st.divider()
+    st.metric("📦 Capacité totale", f"{edited_cap.sum().sum():.1f} jours")
+    
+    st.divider()
+    
+    col_leave, col_run = st.columns(2)
+    
+    with col_leave:
+        st.markdown("### 🏖️ Congés (jours)")
+        leave_data = {}
+        for team in TEAMS:
+            leave_data[team] = []
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                leave_data[team].append(st.session_state.leaves[key])
+        
+        df_leave = pd.DataFrame(leave_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_leave = st.data_editor(df_leave, use_container_width=True, key="leaves_editor")
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                st.session_state.leaves[(team, it["name"])] = edited_leave.iloc[idx, jdx]
+    
+    with col_run:
+        st.markdown("### 🛠️ Run & Support (jours)")
+        run_data = {}
+        for team in TEAMS:
+            run_data[team] = []
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                run_data[team].append(st.session_state.run_days[key])
+        
+        df_run = pd.DataFrame(run_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_run = st.data_editor(df_run, use_container_width=True, key="run_days_editor")
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
+
+st.divider()
+st.markdown(f"🛠 **PI Planning Tool v7.9** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
