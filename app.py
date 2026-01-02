@@ -848,7 +848,6 @@ with tab_projects:
         )
         
         dates_changed = False
-        validation_errors = []
         
         for idx, row in edited_config.iterrows():
             task_name = row["Tâche"]
@@ -881,39 +880,6 @@ with tab_projects:
                 new_start = row["Début"]
                 new_end = row["Fin"]
                 
-                if is_weekend(new_start):
-                    validation_errors.append(
-                        f"❌ **{task_name}** : La date de début ({new_start.strftime('%d/%m/%Y')}) est un weekend. "
-                        f"Cliquez sur '🔧 Corriger automatiquement' pour ajuster."
-                    )
-                    continue
-                
-                if is_weekend(new_end):
-                    validation_errors.append(
-                        f"❌ **{task_name}** : La date de fin ({new_end.strftime('%d/%m/%Y')}) est un weekend. "
-                        f"Cliquez sur '🔧 Corriger automatiquement' pour ajuster."
-                    )
-                    continue
-                
-                if task_name == "PROD" and is_friday(new_start):
-                    validation_errors.append(
-                        f"❌ **{task_name}** : PROD ne peut pas être planifiée un vendredi ({new_start.strftime('%d/%m/%Y')}). "
-                        f"Cliquez sur '🔧 Corriger automatiquement' pour ajuster au jeudi."
-                    )
-                    continue
-                
-                if new_depends and new_depends in task_dates_dict:
-                    parent_start, parent_end = task_dates_dict[new_depends]
-                    parent_end_date = parent_end.date()
-                    
-                    if new_start <= parent_end_date:
-                        validation_errors.append(
-                            f"❌ **{task_name}** : La date de début ({new_start.strftime('%d/%m/%Y')}) "
-                            f"ne peut pas être avant ou égale à la fin de '{new_depends}' ({parent_end_date.strftime('%d/%m/%Y')}). "
-                            f"Date minimum autorisée : {get_next_weekday(parent_end_date + timedelta(days=1)).strftime('%d/%m/%Y')}"
-                        )
-                        continue
-                
                 if override_key not in st.session_state.project_task_overrides:
                     st.session_state.project_task_overrides[override_key] = {}
                 
@@ -926,13 +892,7 @@ with tab_projects:
                     st.session_state.project_task_overrides[override_key]["end_date"] = new_end
                     dates_changed = True
         
-        if validation_errors:
-            st.error("### ⚠️ Erreurs de validation")
-            for error in validation_errors:
-                st.warning(error)
-            st.info("💡 **Solution** : Utilisez le bouton '🔧 Corriger automatiquement' ci-dessus pour corriger toutes les erreurs d'un coup")
-        
-        if dates_changed and not validation_errors:
+        if dates_changed:
             st.rerun()
         
         tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
