@@ -330,32 +330,89 @@ def export_data():
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 def import_data(json_str):
-    """Importe les données depuis un JSON"""
+    """Importe les données depuis un JSON (compatible anciennes versions)"""
     try:
         data = json.loads(json_str)
         
-        st.session_state.tasks_config = data.get("tasks_config", {})
-        st.session_state.projects_tasks = data.get("projects_tasks", {})
-        st.session_state.custom_tasks = data.get("custom_tasks", {})
+        # Import tasks_config (enlever les charges si présentes)
+        tasks_config_import = data.get("tasks_config", {})
+        st.session_state.tasks_config = {}
+        for task_name, task_data in tasks_config_import.items():
+            clean_task = {
+                "name": task_data.get("name", task_name),
+                "team": task_data.get("team", "Product Owner"),
+                "order": task_data.get("order", 1),
+                "depends_on": task_data.get("depends_on", None)
+            }
+            st.session_state.tasks_config[task_name] = clean_task
         
+        # Import projects_tasks
+        st.session_state.projects_tasks = data.get("projects_tasks", {})
+        
+        # Import custom_tasks (enlever les charges si présentes)
+        custom_tasks_import = data.get("custom_tasks", {})
+        st.session_state.custom_tasks = {}
+        for task_name, task_data in custom_tasks_import.items():
+            clean_task = {
+                "team": task_data.get("team", "Product Owner"),
+                "start_date": task_data.get("start_date", ITERATIONS[0]["start"]),
+                "depends_on": task_data.get("depends_on", None)
+            }
+            st.session_state.custom_tasks[task_name] = clean_task
+        
+        # Import project_task_overrides (enlever les charges si présentes)
         overrides_import = data.get("project_task_overrides", {})
         st.session_state.project_task_overrides = {}
         for key, value in overrides_import.items():
             st.session_state.project_task_overrides[key] = {}
             for k, v in value.items():
-                if k in ["start_date", "end_date"] and v:
-                    st.session_state.project_task_overrides[key][k] = date.fromisoformat(v)
-                else:
+                # Ne charger que les dates et dépendances (pas la charge)
+                if k in ["start_date", "end_date"]:
+                    if v:
+                        st.session_state.project_task_overrides[key][k] = date.fromisoformat(v)
+                elif k == "depends_on":
                     st.session_state.project_task_overrides[key][k] = v
         
+        # Import capacity
         capacity_import = data.get("capacity", {})
-        st.session_state.capacity = {tuple(k.split("||")): v for k, v in capacity_import.items()}
+        st.session_state.capacity = {}
+        for k, v in capacity_import.items():
+            try:
+                key_tuple = tuple(k.split("||"))
+                st.session_state.capacity[key_tuple] = v
+            except:
+                pass
         
+        # Import leaves
         leaves_import = data.get("leaves", {})
-        st.session_state.leaves = {tuple(k.split("||")): v for k, v in leaves_import.items()}
+        st.session_state.leaves = {}
+        for k, v in leaves_import.items():
+            try:
+                key_tuple = tuple(k.split("||"))
+                st.session_state.leaves[key_tuple] = v
+            except:
+                pass
         
+        # Import run_days
         run_days_import = data.get("run_days", {})
-        st.session_state.run_days = {tuple(k.split("||")): v for k, v in run_days_import.items()}
+        st.session_state.run_days = {}
+        for k, v in run_days_import.items():
+            try:
+                key_tuple = tuple(k.split("||"))
+                st.session_state.run_days[key_tuple] = v
+            except:
+                pass
+        
+        # Initialiser les valeurs manquantes pour les nouvelles équipes
+        for team in TEAMS:
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                if key not in st.session_state.capacity:
+                    st.session_state.capacity[key] = 10.0
+                if key not in st.session_state.leaves:
+                    st.session_state.leaves[key] = 0.0
+                if key not in st.session_state.run_days:
+                    st.session_state.run_days[key] = 0.0
         
         return True, f"✅ Données importées avec succès (version {data.get('version', 'inconnue')})"
     except Exception as e:
@@ -842,6 +899,7 @@ with tab_projects:
         )
         
         dates_changed = False
+        depends_changed = False
         
         for idx, row in edited_config.iterrows():
             task_name = row["Tâche"]
@@ -875,14 +933,21 @@ with tab_projects:
                 
                 if new_depends != original_depends:
                     st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
+                    depends_changed = True
                 
                 if new_start != original_start or new_end != original_end:
                     st.session_state.project_task_overrides[override_key]["start_date"] = new_start
                     st.session_state.project_task_overrides[override_key]["end_date"] = new_end
                     dates_changed = True
         
-        if dates_changed:
-            st.rerun()
+        # Afficher un message si des modifications ont été faites
+        if dates_changed or depends_changed:
+            col_info1, col_info2 = st.columns([3, 1])
+            with col_info1:
+                st.success("✅ Modifications enregistrées automatiquement")
+            with col_info2:
+                if st.button("🔄 Recalculer le planning", key=f"recalc_{selected_proj}", use_container_width=True):
+                    st.rerun()
         
         tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
         
