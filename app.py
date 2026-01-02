@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v5.8", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v5.9", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -92,6 +92,9 @@ if "projects_tasks" not in st.session_state:
 if "custom_tasks" not in st.session_state:
     st.session_state.custom_tasks = {}
 
+if "project_task_overrides" not in st.session_state:
+    st.session_state.project_task_overrides = {}
+
 if "capacity" not in st.session_state:
     st.session_state.capacity = {}
     for team in TEAMS:
@@ -130,6 +133,20 @@ def get_all_tasks_for_project(project_name):
     custom_tasks = st.session_state.projects_tasks.get(project_name, {}).get("custom", [])
     return default_tasks + custom_tasks
 
+def get_task_charge_for_project(project_name, task_name):
+    """Récupère la charge d'une tâche pour un projet (override ou default)"""
+    override_key = f"{project_name}_{task_name}"
+    if override_key in st.session_state.project_task_overrides:
+        return st.session_state.project_task_overrides[override_key].get("charge", st.session_state.tasks_config[task_name]["charge"])
+    return st.session_state.tasks_config[task_name]["charge"]
+
+def get_task_depends_for_project(project_name, task_name):
+    """Récupère la dépendance d'une tâche pour un projet (override ou default)"""
+    override_key = f"{project_name}_{task_name}"
+    if override_key in st.session_state.project_task_overrides:
+        return st.session_state.project_task_overrides[override_key].get("depends_on", st.session_state.tasks_config[task_name]["depends_on"])
+    return st.session_state.tasks_config[task_name]["depends_on"]
+
 def calculate_planning():
     """
     Calcul du planning respectant le sizing (en jours) et les dépendances.
@@ -142,7 +159,6 @@ def calculate_planning():
     current_date = first_iter_start
     
     for project in sorted(PROJECTS, key=lambda x: x["priority"]):
-        # Récupérer les tâches default ET custom du projet
         default_tasks = st.session_state.projects_tasks.get(project["name"], {}).get("default", [])
         custom_tasks = st.session_state.projects_tasks.get(project["name"], {}).get("custom", [])
         project_task_names = default_tasks + custom_tasks
@@ -153,8 +169,12 @@ def calculate_planning():
             
             start_date = current_date
             
-            if task["depends_on"]:
-                parent_key = f"{project['name']}_{task['depends_on']}"
+            # Récupérer charge et dépendance pour ce projet
+            task_charge = get_task_charge_for_project(project["name"], task["name"])
+            task_depends = get_task_depends_for_project(project["name"], task["name"])
+            
+            if task_depends:
+                parent_key = f"{project['name']}_{task_depends}"
                 if parent_key in task_dates:
                     _, parent_end_date = task_dates[parent_key]
                     start_date = parent_end_date + timedelta(days=1)
@@ -166,13 +186,13 @@ def calculate_planning():
                         "Équipe": task["team"],
                         "Début": None,
                         "Fin": None,
-                        "Charge": task["charge"],
-                        "Dépendance": task["depends_on"],
+                        "Charge": task_charge,
+                        "Dépendance": task_depends,
                         "Statut": "❌ Bloqué"
                     })
                     continue
             
-            end_date = start_date + timedelta(days=task["charge"])
+            end_date = start_date + timedelta(days=task_charge)
             
             task_key = f"{project['name']}_{task['name']}"
             task_dates[task_key] = (start_date, end_date)
@@ -184,12 +204,11 @@ def calculate_planning():
                 "Équipe": task["team"],
                 "Début": start_date.strftime("%Y-%m-%d"),
                 "Fin": end_date.strftime("%Y-%m-%d"),
-                "Charge": task["charge"],
-                "Dépendance": task["depends_on"],
+                "Charge": task_charge,
+                "Dépendance": task_depends,
                 "Statut": "✅ Planifié"
             })
         
-        # Ajouter les tâches CUSTOM du projet
         for custom_task_name in custom_tasks:
             if custom_task_name not in st.session_state.tasks_config:
                 if custom_task_name in st.session_state.custom_tasks:
@@ -225,8 +244,7 @@ st.divider()
 # ONGLETS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-tab_config, tab_projects, tab_planning, tab_capa, tab_cong = st.tabs([
-    "⚙️ Configuration Tâches",
+tab_projects, tab_planning, tab_capa, tab_cong = st.tabs([
     "🎯 Projets & Tâches",
     "📋 Planning & Gantt",
     "📊 Capacités",
@@ -234,84 +252,7 @@ tab_config, tab_projects, tab_planning, tab_capa, tab_cong = st.tabs([
 ])
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 0: CONFIGURATION TÂCHES
-# ═══════════════════════════════════════════════════════════════════════════════
-with tab_config:
-    st.subheader("⚙️ Configuration des Tâches - Sizing & Dépendances")
-    st.markdown("""
-    Modifiez ici les tâches template :
-    - **Sizing (Charge)** : Nombre de jours requis pour la tâche
-    - **Dépendances** : Tâche(s) requise(s) avant de commencer celle-ci
-    
-    💡 Si une tâche dépend d'une autre, elle commencera automatiquement après la date de fin de sa dépendance.
-    """)
-    
-    config_data = []
-    for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
-        config_data.append({
-            "# Ordre": task["order"],
-            "Tâche": task["name"],
-            "Équipe": task["team"],
-            "Charge (j)": task["charge"],
-            "Dépend de": task["depends_on"] if task["depends_on"] else "(Aucune)"
-        })
-    
-    df_config = pd.DataFrame(config_data)
-    
-    st.markdown("#### 📝 Éditer le Sizing (Charge)")
-    edited_config = st.data_editor(
-        df_config[["# Ordre", "Tâche", "Équipe", "Charge (j)"]],
-        use_container_width=True,
-        hide_index=True,
-        key="tasks_config_editor",
-        column_config={
-            "# Ordre": st.column_config.NumberColumn(disabled=True),
-            "Tâche": st.column_config.TextColumn(disabled=True, width="large"),
-            "Équipe": st.column_config.TextColumn(disabled=True),
-            "Charge (j)": st.column_config.NumberColumn("Charge (j)", min_value=0.5, max_value=20, step=0.5)
-        }
-    )
-    
-    for idx, row in edited_config.iterrows():
-        task_name = row["Tâche"]
-        if task_name in st.session_state.tasks_config:
-            st.session_state.tasks_config[task_name]["charge"] = row["Charge (j)"]
-    
-    st.divider()
-    
-    st.markdown("#### 🔗 Éditer les Dépendances")
-    
-    all_task_names = [t["name"] for t in get_tasks_list()]
-    
-    for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
-        col1, col2 = st.columns([2, 2])
-        
-        with col1:
-            st.markdown(f"**{task['name']}** ({task['team']})")
-        
-        with col2:
-            options = ["(Aucune)"] + [t for t in all_task_names if t != task["name"]]
-            current_dep = task["depends_on"] if task["depends_on"] else "(Aucune)"
-            
-            new_dep = st.selectbox(
-                "Dépend de",
-                options=options,
-                index=options.index(current_dep),
-                key=f"dep_{task['name']}",
-                label_visibility="collapsed"
-            )
-            
-            if new_dep == "(Aucune)":
-                st.session_state.tasks_config[task["name"]]["depends_on"] = None
-            else:
-                st.session_state.tasks_config[task["name"]]["depends_on"] = new_dep
-    
-    if st.button("💾 Sauvegarder Configuration", key="save_config"):
-        st.success("✅ Configuration mise à jour !")
-        st.rerun()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 1: PROJETS & TÂCHES
+# ONGLET 0: PROJETS & TÂCHES
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_projects:
     st.subheader("🎯 Gérer les Tâches par Projet")
@@ -324,12 +265,83 @@ with tab_projects:
         current_default_tasks = st.session_state.projects_tasks.get(selected_proj, {}).get("default", [])
         current_custom_tasks = st.session_state.projects_tasks.get(selected_proj, {}).get("custom", [])
         
-        st.markdown(f"#### Tâches du projet: **{selected_proj}**")
+        st.markdown(f"#### Projet: **{selected_proj}**")
         
         # ═════════════════════════════════════════════════════════════════════════
-        # SECTION 1: TÂCHES DEFAULT
+        # SECTION 1: TABLEAU ÉDITABLE - SIZING & DÉPENDANCES
         # ═════════════════════════════════════════════════════════════════════════
-        st.markdown("**🔧 Tâches Template (par défaut)**")
+        st.markdown("**📋 Configuration des Tâches - Sizing & Dépendances**")
+        
+        all_project_tasks = get_all_tasks_for_project(selected_proj)
+        
+        # Construire le tableau éditable
+        config_data = []
+        for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
+            if task["name"] not in all_project_tasks:
+                continue
+            
+            override_key = f"{selected_proj}_{task['name']}"
+            charge = get_task_charge_for_project(selected_proj, task["name"])
+            depends = get_task_depends_for_project(selected_proj, task["name"])
+            
+            config_data.append({
+                "Tâche": task["name"],
+                "Équipe": task["team"],
+                "Charge (j)": charge,
+                "Dépend de": depends if depends else "(Aucune)"
+            })
+        
+        df_config = pd.DataFrame(config_data)
+        
+        # Éditeur de données
+        edited_config = st.data_editor(
+            df_config,
+            use_container_width=True,
+            hide_index=True,
+            key=f"config_editor_{selected_proj}",
+            column_config={
+                "Tâche": st.column_config.TextColumn(disabled=True, width="large"),
+                "Équipe": st.column_config.TextColumn(disabled=True),
+                "Charge (j)": st.column_config.NumberColumn("Charge (j)", min_value=0.5, max_value=20, step=0.5),
+                "Dépend de": st.column_config.SelectboxColumn(
+                    "Dépend de",
+                    options=["(Aucune)"] + all_project_tasks
+                )
+            }
+        )
+        
+        # Sauvegarder les changements
+        for idx, row in edited_config.iterrows():
+            task_name = row["Tâche"]
+            override_key = f"{selected_proj}_{task_name}"
+            
+            # Récupérer les valeurs originales pour comparaison
+            original_task = st.session_state.tasks_config.get(task_name)
+            if original_task:
+                original_charge = original_task["charge"]
+                original_depends = original_task["depends_on"]
+            else:
+                original_charge = 1
+                original_depends = None
+            
+            new_charge = row["Charge (j)"]
+            new_depends = None if row["Dépend de"] == "(Aucune)" else row["Dépend de"]
+            
+            # Si différent de l'original, stocker comme override
+            if new_charge != original_charge or new_depends != original_depends:
+                if override_key not in st.session_state.project_task_overrides:
+                    st.session_state.project_task_overrides[override_key] = {}
+                
+                st.session_state.project_task_overrides[override_key]["charge"] = new_charge
+                st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
+        
+        st.divider()
+        
+        # ═════════════════════════════════════════════════════════════════════════
+        # SECTION 2: AJOUTER/SUPPRIMER TÂCHES TEMPLATE
+        # ═════════════════════════════════════════════════════════════════════════
+        st.markdown("**🔧 Gestion des Tâches Template**")
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -339,7 +351,7 @@ with tab_projects:
                 with col_task:
                     st.text(task_name)
                 with col_remove:
-                    if st.button("❌", key=f"remove_default_{task_name}"):
+                    if st.button("❌", key=f"remove_default_{selected_proj}_{task_name}"):
                         st.session_state.projects_tasks[selected_proj]["default"].remove(task_name)
                         st.rerun()
         
@@ -348,8 +360,8 @@ with tab_projects:
             available_tasks = [t for t in all_task_names if t not in current_default_tasks]
             
             if available_tasks:
-                new_task = st.selectbox("Sélectionner une tâche template", options=available_tasks, key="add_default_task")
-                if st.button("➕ Ajouter (Template)", key="btn_add_default"):
+                new_task = st.selectbox("Sélectionner une tâche template", options=available_tasks, key=f"add_default_task_{selected_proj}")
+                if st.button("➕ Ajouter (Template)", key=f"btn_add_default_{selected_proj}"):
                     st.session_state.projects_tasks[selected_proj]["default"].append(new_task)
                     st.rerun()
             else:
@@ -358,34 +370,33 @@ with tab_projects:
         st.divider()
         
         # ═════════════════════════════════════════════════════════════════════════
-        # SECTION 2: CRÉER UNE TÂCHE PERSONNALISÉE
+        # SECTION 3: CRÉER UNE TÂCHE PERSONNALISÉE
         # ═════════════════════════════════════════════════════════════════════════
         st.markdown("**➕ Créer une Tâche Personnalisée**")
         
         col_name, col_team, col_charge = st.columns(3)
         
         with col_name:
-            new_task_name = st.text_input("📝 Nom de la tâche", placeholder="Ex: Migration BDD")
+            new_task_name = st.text_input("📝 Nom de la tâche", placeholder="Ex: Migration BDD", key=f"new_task_name_{selected_proj}")
         
         with col_team:
-            new_task_team = st.selectbox("👥 Équipe responsable", options=TEAMS)
+            new_task_team = st.selectbox("👥 Équipe responsable", options=TEAMS, key=f"new_task_team_{selected_proj}")
         
         with col_charge:
-            new_task_charge = st.number_input("📅 Charge (jours)", min_value=0.5, max_value=20.0, step=0.5, value=1.0)
+            new_task_charge = st.number_input("📅 Charge (jours)", min_value=0.5, max_value=20.0, step=0.5, value=1.0, key=f"new_task_charge_{selected_proj}")
         
         col_start, col_dep = st.columns(2)
         
         with col_start:
-            new_task_start = st.date_input("📅 Date de début", value=date(2026, 1, 12))
+            new_task_start = st.date_input("📅 Date de début", value=date(2026, 1, 12), key=f"new_task_start_{selected_proj}")
         
         with col_dep:
             all_project_tasks = get_all_tasks_for_project(selected_proj)
             dep_options = ["(Aucune)"] + all_project_tasks
-            new_task_dep = st.selectbox("🔗 Dépendance", options=dep_options)
+            new_task_dep = st.selectbox("🔗 Dépendance", options=dep_options, key=f"new_task_dep_{selected_proj}")
         
-        if st.button("➕ Créer la tâche personnalisée", key="btn_create_custom"):
+        if st.button("➕ Créer la tâche personnalisée", key=f"btn_create_custom_{selected_proj}"):
             if new_task_name:
-                task_id = f"{selected_proj}_{new_task_name}"
                 st.session_state.custom_tasks[new_task_name] = {
                     "team": new_task_team,
                     "charge": new_task_charge,
@@ -405,7 +416,7 @@ with tab_projects:
         st.divider()
         
         # ═════════════════════════════════════════════════════════════════════════
-        # SECTION 3: TÂCHES PERSONNALISÉES
+        # SECTION 4: TÂCHES PERSONNALISÉES
         # ═════════════════════════════════════════════════════════════════════════
         if current_custom_tasks:
             st.markdown("**📌 Tâches Personnalisées**")
@@ -424,12 +435,12 @@ with tab_projects:
                     """)
                 
                 with col_remove:
-                    if st.button("❌", key=f"remove_custom_{custom_task_name}", help="Supprimer"):
+                    if st.button("❌", key=f"remove_custom_{selected_proj}_{custom_task_name}", help="Supprimer"):
                         st.session_state.projects_tasks[selected_proj]["custom"].remove(custom_task_name)
                         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 2: PLANNING & GANTT
+# ONGLET 1: PLANNING & GANTT
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_planning:
     st.subheader("📋 Planning détaillé & Gantt")
@@ -519,7 +530,7 @@ with tab_planning:
                 st.warning("⚠️ Aucune tâche avec dates valides.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 3: CAPACITÉS
+# ONGLET 2: CAPACITÉS
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_capa:
     st.subheader("📊 Capacités Brutes (Jours)")
@@ -553,7 +564,7 @@ with tab_capa:
     st.metric("📦 Capacité totale", f"{edited_cap.sum().sum():.1f} jours")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 4: CONGÉS & RUN
+# ONGLET 3: CONGÉS & RUN
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_cong:
     st.subheader("🏖️ Congés & Support")
@@ -593,4 +604,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v5.8** (Final) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v5.9** (Unified Sizing & Dependencies per Project) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
