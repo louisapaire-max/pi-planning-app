@@ -605,3 +605,4 @@ with tab_cong:
 
 st.divider()
 st.markdown(f"🛠 **PI Planning Tool v5.9** (Unified Sizing & Dependencies per Project) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
