@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import json
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v7.9", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v7.9.1", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -156,7 +156,7 @@ def export_data():
                 overrides_export[key][k] = v
     
     data = {
-        "version": "7.9",
+        "version": "7.9.1",
         "export_date": datetime.now().isoformat(),
         "tasks_config": st.session_state.tasks_config,
         "projects_tasks": st.session_state.projects_tasks,
@@ -236,7 +236,7 @@ with st.sidebar:
             st.error(message)
     
     st.divider()
-    st.caption(f"Version 7.9 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    st.caption(f"Version 7.9.1 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FONCTIONS
@@ -572,13 +572,16 @@ def create_gantt_chart(df_gantt, title="Gantt Chart"):
     fig.update_layout(
         showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
+            orientation="v",
+            yanchor="top",
+            y=1,
+            xanchor="left",
+            x=1.01,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor="Gray",
+            borderwidth=1
         ),
-        margin=dict(t=150, b=50, l=250, r=50),
+        margin=dict(t=120, b=50, l=250, r=200),
         plot_bgcolor='white'
     )
     
@@ -971,9 +974,9 @@ with tab_planning:
         if not df_filtered.empty:
             st.divider()
             
+            # CORRECTION ICI : Remplacer directement la colonne au lieu de créer une nouvelle
             df_gantt_global = df_filtered.dropna(subset=["Start Date", "End Date"]).copy()
-            df_gantt_global["Tâche_Display"] = df_gantt_global["Tâche"] + " [" + df_gantt_global["Projet"].str[:30] + "]"
-            df_gantt_global = df_gantt_global.rename(columns={"Tâche_Display": "Tâche"})
+            df_gantt_global["Tâche"] = df_gantt_global["Tâche"] + " [" + df_gantt_global["Projet"].str[:30] + "]"
             
             if not df_gantt_global.empty:
                 fig_global = create_gantt_chart(df_gantt_global, title="📅 Gantt Global - Vue Filtrée")
@@ -1257,4 +1260,4 @@ with tab_capa:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v7.9** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v7.9.1** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
