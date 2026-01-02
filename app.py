@@ -10,7 +10,6 @@ from datetime import datetime, date, timedelta
 st.set_page_config(page_title="PI Planning - Capacity Tool v5", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances Éditables")
 
-# JOURS FÉRIÉS 2026
 HOLIDAYS_2026 = [
     "2026-01-01", "2026-04-06", "2026-05-01", "2026-05-08", 
     "2026-05-14", "2026-05-25", "2026-07-14", "2026-08-15", 
@@ -85,7 +84,6 @@ TASK_STATUSES = ["À faire", "En cours", "Terminé", "Bloqué", "En attente"]
 # ═════════════════════════════════════════════════════════════════════
 
 if "tasks_config" not in st.session_state:
-    # Copie profonde de TASKS_DEFAULT pour pouvoir les éditer
     st.session_state.tasks_config = {task["name"]: task.copy() for task in TASKS_DEFAULT}
 
 if "capacity" not in st.session_state:
@@ -131,11 +129,9 @@ def get_tasks_list():
     """Retourne la liste des tâches depuis session_state (éditable)"""
     return list(st.session_state.tasks_config.values())
 
-@st.cache_data
-def calculate_planning_cached(tasks_tuple):
-    """Calcul du planning avec gestion des dépendances"""
-    # Reconvertir tuple en liste de dicts pour la logique
-    TASKS = [dict(t) for t in tasks_tuple]
+def calculate_planning():
+    """Calcul du planning avec gestion des dépendances (SANS CACHING)"""
+    TASKS = get_tasks_list()
     
     remaining = {}
     for team in TEAMS:
@@ -214,9 +210,8 @@ def calculate_planning_cached(tasks_tuple):
 # INTERFACE
 # ═════════════════════════════════════════════════════════════════════
 
-# Calcul planning
-tasks_tuple = tuple((k, tuple(sorted(v.items()))) for k, v in st.session_state.tasks_config.items())
-planning, remaining = calculate_planning_cached(tasks_tuple)
+# Calcul planning (sans caching)
+planning, remaining = calculate_planning()
 df_plan = pd.DataFrame(planning)
 
 # KPIs
@@ -255,7 +250,7 @@ tab_config, tab_planning, tab_capa, tab_cong, tab_time = st.tabs([
 ])
 
 # ═════════════════════════════════════════════════════════════════════
-# ONGLET 0: CONFIGURATION TÂCHES (NOUVEAU)
+# ONGLET 0: CONFIGURATION TÂCHES
 # ═════════════════════════════════════════════════════════════════════
 with tab_config:
     st.subheader("⚙️ Configuration des Tâches - Sizing & Dépendances")
@@ -317,7 +312,6 @@ with tab_config:
         
         with col2:
             # Selecteur de dépendance
-            # Options : "Aucune" + toutes les autres tâches
             options = ["(Aucune)"] + [t for t in all_task_names if t != task["name"]]
             current_dep = task["depends_on"] if task["depends_on"] else "(Aucune)"
             
@@ -336,7 +330,7 @@ with tab_config:
                 st.session_state.tasks_config[task["name"]]["depends_on"] = new_dep
     
     if st.button("💾 Sauvegarder les modifications", key="save_config"):
-        st.success("✅ Configuration mise à jour ! Le planning se recalcule automatiquement.")
+        st.success("✅ Configuration mise à jour !")
         st.rerun()
 
 # ═════════════════════════════════════════════════════════════════════
@@ -415,120 +409,4 @@ with tab_planning:
                     )
 
                 fig.update_xaxes(
-                    tickformat="%a %d/%m",
-                    dtick=86400000.0,
-                    side="top",
-                    tickfont=dict(size=11),
-                    rangebreaks=[dict(bounds=["sat", "mon"])]
-                )
-                fig.update_yaxes(autorange="reversed")
-                
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("⚠️ Aucune tâche avec dates valides.")
-
-# ═════════════════════════════════════════════════════════════════════
-# ONGLET 2: CAPACITÉS
-# ═════════════════════════════════════════════════════════════════════
-with tab_capa:
-    st.subheader("📊 Capacités Brutes (Jours)")
-    
-    capacity_data = {}
-    for team in TEAMS:
-        capacity_data[team] = []
-        for it in ITERATIONS:
-            key = (team, it["name"])
-            capacity_data[team].append(st.session_state.capacity[key])
-    
-    df_cap = pd.DataFrame(capacity_data, index=[it["name"] for it in ITERATIONS]).T
-    
-    edited_cap = st.data_editor(
-        df_cap,
-        use_container_width=True,
-        key="capacity_editor",
-        column_config={
-            it["name"]: st.column_config.NumberColumn(
-                it["name"], min_value=0, max_value=100, step=0.5, format="%.1f j"
-            ) for it in ITERATIONS
-        }
-    )
-    
-    for idx, team in enumerate(TEAMS):
-        for jdx, it in enumerate(ITERATIONS):
-            key = (team, it["name"])
-            st.session_state.capacity[key] = edited_cap.iloc[idx, jdx]
-    
-    st.divider()
-    st.metric("📦 Capacité totale", f"{edited_cap.sum().sum():.1f} jours")
-
-# ═════════════════════════════════════════════════════════════════════
-# ONGLET 3: CONGÉS & RUN
-# ═════════════════════════════════════════════════════════════════════
-with tab_cong:
-    st.subheader("🏖️ Congés & Support")
-    
-    col_leave, col_run = st.columns(2)
-    
-    with col_leave:
-        st.markdown("#### 🏖️ Congés (jours)")
-        leave_data = {}
-        for team in TEAMS:
-            leave_data[team] = []
-            for it in ITERATIONS:
-                key = (team, it["name"])
-                leave_data[team].append(st.session_state.leaves[key])
-        
-        df_leave = pd.DataFrame(leave_data, index=[it["name"] for it in ITERATIONS]).T
-        edited_leave = st.data_editor(df_leave, use_container_width=True, key="leaves_editor")
-        
-        for idx, team in enumerate(TEAMS):
-            for jdx, it in enumerate(ITERATIONS):
-                st.session_state.leaves[(team, it["name"])] = edited_leave.iloc[idx, jdx]
-    
-    with col_run:
-        st.markdown("#### 🛠️ Run & Support (jours)")
-        run_data = {}
-        for team in TEAMS:
-            run_data[team] = []
-            for it in ITERATIONS:
-                key = (team, it["name"])
-                run_data[team].append(st.session_state.run_days[key])
-        
-        df_run = pd.DataFrame(run_data, index=[it["name"] for it in ITERATIONS]).T
-        edited_run = st.data_editor(df_run, use_container_width=True, key="run_days_editor")
-        
-        for idx, team in enumerate(TEAMS):
-            for jdx, it in enumerate(ITERATIONS):
-                st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
-
-# ═════════════════════════════════════════════════════════════════════
-# ONGLET 4: TIMELINE
-# ═════════════════════════════════════════════════════════════════════
-with tab_time:
-    st.subheader("📈 Vue par Itération")
-    
-    df_gantt_global = df_plan[df_plan["Statut"] == "✅ Planifié"]
-    
-    if not df_gantt_global.empty:
-        col1, col2, col3 = st.columns(3)
-        cols = [col1, col2, col3]
-        
-        for idx, it in enumerate(ITERATIONS):
-            with cols[idx % 3]:
-                st.markdown(f"#### {it['name']}")
-                tasks_it = df_gantt_global[df_gantt_global["Itération"] == it["name"]]
-                
-                if not tasks_it.empty:
-                    load_per_project = tasks_it.groupby("Projet")["Charge"].sum().reset_index()
-                    st.dataframe(
-                        load_per_project.style.background_gradient(cmap="Blues"), 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-                else:
-                    st.caption("Aucune tâche.")
-    else:
-        st.info("Aucune tâche planifiée.")
-
-st.divider()
-st.markdown(f"🛠 **PI Planning Tool v5.2** (with editable sizing & dependencies) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+                    
