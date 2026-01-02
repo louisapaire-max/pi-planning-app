@@ -511,9 +511,9 @@ def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
             annotation_font_size=10
         )
     
-    today_dt = datetime.now()
+    today_timestamp = pd.Timestamp(datetime.now())
     fig.add_vline(
-        x=today_dt,
+        x=today_timestamp,
         line_width=3,
         line_dash="solid",
         line_color="rgb(255, 0, 0)",
@@ -585,9 +585,9 @@ def create_gantt_chart_global(df_gantt, title="Gantt Chart"):
             annotation_font_size=10
         )
     
-    today_dt = datetime.now()
+    today_timestamp = pd.Timestamp(datetime.now())
     fig.add_vline(
-        x=today_dt,
+        x=today_timestamp,
         line_width=3,
         line_dash="solid",
         line_color="rgb(255, 0, 0)",
@@ -1022,5 +1022,242 @@ with tab_planning:
             st.divider()
             
             csv_data = df_sorted[display_cols].to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="📥 Télécharger le planning filtré (CSV)",
+                data=csv_data,
+                file_name=f"planning_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
+        else:
+            st.warning("❌ Aucune donnée ne correspond aux filtres sélectionnés")
+            st.info("💡 Astuce : Essayez de réinitialiser les filtres ou de sélectionner d'autres critères")
+    
+    else:
+        st.warning("Aucune donnée de planning disponible")
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 2: AUJOURD'HUI & CETTE SEMAINE
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_today:
+    st.subheader("📅 Aujourd'hui & Cette semaine")
+    
+    today = datetime.now().date()
+    week_start, week_end = get_current_week_range()
+    
+    st.info(f"📆 **Aujourd'hui** : {today.strftime('%A %d %B %Y')} | **Semaine** : {week_start.strftime('%d/%m')} → {week_end.strftime('%d/%m/%Y')}")
+    
+    st.markdown("## 🔥 Tâches en cours aujourd'hui")
+    
+    df_today = get_tasks_for_period(today, today)
+    
+    if not df_today.empty:
+        projects_today = df_today.groupby("Projet")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📊 Projets actifs", len(projects_today))
+        with col2:
+            st.metric("📋 Tâches en cours", len(df_today))
+        with col3:
+            teams_active = df_today["Équipe"].nunique()
+            st.metric("👥 Équipes mobilisées", teams_active)
+        
+        st.divider()
+        
+        for project_name, tasks in projects_today:
+            with st.expander(f"**{project_name}**", expanded=True):
+                for idx, task in tasks.iterrows():
+                    team_color = TEAM_COLORS.get(task["Équipe"], "#999999")
+                    
+                    col_task, col_team, col_dates = st.columns([3, 2, 2])
+                    
+                    with col_task:
+                        st.markdown(f"**{task['Tâche']}**")
+                    
+                    with col_team:
+                        st.markdown(f"<span style='background-color: {team_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;'>{task['Équipe']}</span>", unsafe_allow_html=True)
+                    
+                    with col_dates:
+                        st.caption(f"📅 {task['Début']} → {task['Fin']}")
+                
+                st.divider()
+    else:
+        st.warning("🎉 Aucune tâche en cours aujourd'hui !")
+    
+    st.divider()
+    
+    st.markdown("## 📆 Planning de la semaine")
+    
+    df_week = get_tasks_for_period(week_start, week_end)
+    
+    if not df_week.empty:
+        df_week = df_week.sort_values(["Priorité", "Start Date"])
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📊 Projets actifs", df_week["Projet"].nunique())
+        with col2:
+            st.metric("📋 Tâches totales", len(df_week))
+        with col3:
+            charge_totale = df_week["Charge"].sum()
+            st.metric("⏱️ Charge totale", f"{charge_totale:.1f}j")
+        with col4:
+            teams_week = df_week["Équipe"].nunique()
+            st.metric("👥 Équipes", teams_week)
+        
+        st.divider()
+        
+        st.markdown("### 📋 Détail par projet")
+        
+        projects_week = df_week.groupby("Projet")
+        
+        for project_name, tasks in projects_week:
+            project_priority = tasks.iloc[0]["Priorité"]
+            
+            with st.expander(f"**[P{project_priority}] {project_name}** ({len(tasks)} tâche{'s' if len(tasks) > 1 else ''})", expanded=False):
+                tasks_sorted = tasks.sort_values("Start Date")
+                
+                table_data = []
+                for idx, task in tasks_sorted.iterrows():
+                    task_start = task["Start Date"].date()
+                    task_end = task["End Date"].date()
+                    
+                    if task_end < today:
+                        status = "✅ Terminée"
+                    elif task_start <= today <= task_end:
+                        status = "🔵 En cours"
+                    else:
+                        status = "⏳ À venir"
+                    
+                    table_data.append({
+                        "Statut": status,
+                        "Tâche": task["Tâche"],
+                        "Équipe": task["Équipe"],
+                        "Début": task_start.strftime("%d/%m"),
+                        "Fin": task_end.strftime("%d/%m"),
+                        "Charge": f"{task['Charge']}j"
+                    })
+                
+                df_table = pd.DataFrame(table_data)
+                
+                st.dataframe(
+                    df_table,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Statut": st.column_config.TextColumn("Statut", width="small"),
+                        "Tâche": st.column_config.TextColumn("Tâche", width="large"),
+                        "Équipe": st.column_config.TextColumn("Équipe", width="medium"),
+                        "Début": st.column_config.TextColumn("Début", width="small"),
+                        "Fin": st.column_config.TextColumn("Fin", width="small"),
+                        "Charge": st.column_config.TextColumn("Charge", width="small"),
+                    }
+                )
+                
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    terminées = len([t for t in table_data if t["Statut"] == "✅ Terminée"])
+                    st.caption(f"✅ Terminées : {terminées}")
+                with col_b:
+                    en_cours = len([t for t in table_data if t["Statut"] == "🔵 En cours"])
+                    st.caption(f"🔵 En cours : {en_cours}")
+                with col_c:
+                    a_venir = len([t for t in table_data if t["Statut"] == "⏳ À venir"])
+                    st.caption(f"⏳ À venir : {a_venir}")
+        
+        st.divider()
+        
+        st.markdown("### 👥 Charge par équipe cette semaine")
+        
+        team_workload = df_week.groupby("Équipe")["Charge"].sum().sort_values(ascending=False)
+        
+        col_teams = st.columns(min(4, len(team_workload)))
+        
+        for idx, (team, charge) in enumerate(team_workload.items()):
+            with col_teams[idx % len(col_teams)]:
+                team_color = TEAM_COLORS.get(team, "#999999")
+                st.markdown(
+                    f"<div style='background-color: {team_color}; color: white; padding: 10px; border-radius: 8px; text-align: center;'>"
+                    f"<strong>{team}</strong><br>{charge:.1f} jours</div>",
+                    unsafe_allow_html=True
+                )
+        
+    else:
+        st.warning("📭 Aucune tâche planifiée cette semaine")
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 3: CAPACITÉS & RESSOURCES
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_capa:
+    st.subheader("📊 Capacités & Ressources")
+    
+    st.markdown("### 💼 Capacités Brutes (Jours)")
+    
+    capacity_data = {}
+    for team in TEAMS:
+        capacity_data[team] = []
+        for it in ITERATIONS:
+            key = (team, it["name"])
+            capacity_data[team].append(st.session_state.capacity[key])
+    
+    df_cap = pd.DataFrame(capacity_data, index=[it["name"] for it in ITERATIONS]).T
+    
+    edited_cap = st.data_editor(
+        df_cap,
+        use_container_width=True,
+        key="capacity_editor",
+        column_config={
+            it["name"]: st.column_config.NumberColumn(
+                it["name"], min_value=0, max_value=100, step=0.5, format="%.1f j"
+            ) for it in ITERATIONS
+        }
+    )
+    
+    for idx, team in enumerate(TEAMS):
+        for jdx, it in enumerate(ITERATIONS):
+            key = (team, it["name"])
+            st.session_state.capacity[key] = edited_cap.iloc[idx, jdx]
+    
+    st.divider()
+    st.metric("📦 Capacité totale", f"{edited_cap.sum().sum():.1f} jours")
+    
+    st.divider()
+    
+    col_leave, col_run = st.columns(2)
+    
+    with col_leave:
+        st.markdown("### 🏖️ Congés (jours)")
+        leave_data = {}
+        for team in TEAMS:
+            leave_data[team] = []
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                leave_data[team].append(st.session_state.leaves[key])
+        
+        df_leave = pd.DataFrame(leave_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_leave = st.data_editor(df_leave, use_container_width=True, key="leaves_editor")
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                st.session_state.leaves[(team, it["name"])] = edited_leave.iloc[idx, jdx]
+    
+    with col_run:
+        st.markdown("### 🛠️ Run & Support (jours)")
+        run_data = {}
+        for team in TEAMS:
+            run_data[team] = []
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                run_data[team].append(st.session_state.run_days[key])
+        
+        df_run = pd.DataFrame(run_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_run = st.data_editor(df_run, use_container_width=True, key="run_days_editor")
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
+
+st.divider()
+st.markdown(f"🛠 **PI Planning Tool v7.5** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
