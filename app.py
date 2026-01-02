@@ -48,27 +48,27 @@ TEAM_COLORS = {
 }
 
 TASKS_DEFAULT = [
-    {"name": "Brief requester Delivery", "team": "Product Owner", "order": 1, "charge": 1, "depends_on": None},
-    {"name": "Catalogue Delivery", "team": "Product unit", "order": 2, "charge": 2, "depends_on": "Brief requester Delivery"},
-    {"name": "Control d'interface", "team": "COE (catalogue unifié)", "order": 3, "charge": 1, "depends_on": "Catalogue Delivery"},
-    {"name": "Content", "team": "Marketing", "order": 4, "charge": 2, "depends_on": "Brief requester Delivery"},
-    {"name": "Documentation Project", "team": "Product Owner", "order": 5, "charge": 1, "depends_on": "Brief requester Delivery"},
-    {"name": "Kick-off Digital", "team": "Product Owner", "order": 6, "charge": 0.5, "depends_on": "Brief requester Delivery"},
-    {"name": "Etude d'impact", "team": "Product Owner", "order": 7, "charge": 2, "depends_on": "Kick-off Digital"},
-    {"name": "Maquettes/Wireframe", "team": "Design", "order": 8, "charge": 3, "depends_on": "Etude d'impact"},
-    {"name": "Redaction US / Jira", "team": "Product Owner", "order": 9, "charge": 2, "depends_on": "Maquettes/Wireframe"},
-    {"name": "Refinement", "team": "Product Owner", "order": 10, "charge": 1, "depends_on": "Redaction US / Jira"},
-    {"name": "Integration OCMS", "team": "Webmaster", "order": 11, "charge": 2, "depends_on": "Content"},
-    {"name": "Dev Website Front", "team": "Dev Web Front", "order": 12, "charge": 5, "depends_on": "Refinement"},
-    {"name": "Dev Website Back", "team": "Dev Web Back", "order": 13, "charge": 5, "depends_on": "Refinement"},
-    {"name": "Dev Order", "team": "Dev Order", "order": 14, "charge": 3, "depends_on": "Refinement"},
-    {"name": "Tracking", "team": "Tracking", "order": 15, "charge": 2, "depends_on": "Dev Website Front"},
-    {"name": "check SEO", "team": "SEO", "order": 16, "charge": 1, "depends_on": "Dev Website Front"},
-    {"name": "QA & UAT (langue source)", "team": "QA", "order": 17, "charge": 3, "depends_on": "Dev Website Front"},
-    {"name": "Traduction", "team": "Traduction", "order": 18, "charge": 2, "depends_on": "QA & UAT (langue source)"},
-    {"name": "QA WW", "team": "QA", "order": 19, "charge": 2, "depends_on": "Traduction"},
-    {"name": "Plan de Production", "team": "Product Owner", "order": 20, "charge": 1, "depends_on": "QA WW"},
-    {"name": "PROD", "team": "Product Owner", "order": 21, "charge": 1, "depends_on": "Plan de Production"}
+    {"name": "Brief requester Delivery", "team": "Product Owner", "order": 1, "depends_on": None},
+    {"name": "Catalogue Delivery", "team": "Product unit", "order": 2, "depends_on": "Brief requester Delivery"},
+    {"name": "Control d'interface", "team": "COE (catalogue unifié)", "order": 3, "depends_on": "Catalogue Delivery"},
+    {"name": "Content", "team": "Marketing", "order": 4, "depends_on": "Brief requester Delivery"},
+    {"name": "Documentation Project", "team": "Product Owner", "order": 5, "depends_on": "Brief requester Delivery"},
+    {"name": "Kick-off Digital", "team": "Product Owner", "order": 6, "depends_on": "Brief requester Delivery"},
+    {"name": "Etude d'impact", "team": "Product Owner", "order": 7, "depends_on": "Kick-off Digital"},
+    {"name": "Maquettes/Wireframe", "team": "Design", "order": 8, "depends_on": "Etude d'impact"},
+    {"name": "Redaction US / Jira", "team": "Product Owner", "order": 9, "depends_on": "Maquettes/Wireframe"},
+    {"name": "Refinement", "team": "Product Owner", "order": 10, "depends_on": "Redaction US / Jira"},
+    {"name": "Integration OCMS", "team": "Webmaster", "order": 11, "depends_on": "Content"},
+    {"name": "Dev Website Front", "team": "Dev Web Front", "order": 12, "depends_on": "Refinement"},
+    {"name": "Dev Website Back", "team": "Dev Web Back", "order": 13, "depends_on": "Refinement"},
+    {"name": "Dev Order", "team": "Dev Order", "order": 14, "depends_on": "Refinement"},
+    {"name": "Tracking", "team": "Tracking", "order": 15, "depends_on": "Dev Website Front"},
+    {"name": "check SEO", "team": "SEO", "order": 16, "depends_on": "Dev Website Front"},
+    {"name": "QA & UAT (langue source)", "team": "QA", "order": 17, "depends_on": "Dev Website Front"},
+    {"name": "Traduction", "team": "Traduction", "order": 18, "depends_on": "QA & UAT (langue source)"},
+    {"name": "QA WW", "team": "QA", "order": 19, "depends_on": "Traduction"},
+    {"name": "Plan de Production", "team": "Product Owner", "order": 20, "depends_on": "QA WW"},
+    {"name": "PROD", "team": "Product Owner", "order": 21, "depends_on": "Plan de Production"}
 ]
 
 PROJECTS = [
@@ -193,25 +193,23 @@ def calculate_dates_for_project(project_name):
             continue
         
         manual_start, manual_end = get_task_manual_dates(project_name, task["name"])
-        
-        task_charge = get_task_charge_for_project(project_name, task["name"])
         task_depends = get_task_depends_for_project(project_name, task["name"])
         
-        if task_depends:
+        if manual_start and manual_end:
+            start_date = pd.to_datetime(manual_start)
+            end_date = pd.to_datetime(manual_end)
+        elif task_depends:
             if task_depends in task_dates:
                 _, parent_end_date = task_dates[task_depends]
                 start_date = parent_end_date + timedelta(days=1)
                 start_date = pd.to_datetime(get_next_weekday(start_date.date()))
+                end_date = start_date + timedelta(days=1)
             else:
                 start_date = first_iter_start
-            
-            end_date = start_date + timedelta(days=task_charge)
-        elif manual_start and manual_end:
-            start_date = pd.to_datetime(manual_start)
-            end_date = pd.to_datetime(manual_end)
+                end_date = start_date + timedelta(days=1)
         else:
             start_date = first_iter_start
-            end_date = start_date + timedelta(days=task_charge)
+            end_date = start_date + timedelta(days=1)
         
         task_dates[task["name"]] = (start_date, end_date)
     
@@ -222,21 +220,21 @@ def calculate_dates_for_project(project_name):
             manual_start, manual_end = get_task_manual_dates(project_name, custom_task_name)
             task_depends = custom_task.get("depends_on")
             
-            if task_depends:
+            if manual_start and manual_end:
+                start_date = pd.to_datetime(manual_start)
+                end_date = pd.to_datetime(manual_end)
+            elif task_depends:
                 if task_depends in task_dates:
                     _, parent_end_date = task_dates[task_depends]
                     start_date = parent_end_date + timedelta(days=1)
                     start_date = pd.to_datetime(get_next_weekday(start_date.date()))
+                    end_date = start_date + timedelta(days=1)
                 else:
                     start_date = pd.to_datetime(ITERATIONS[0]["start"])
-                
-                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
-            elif manual_start and manual_end:
-                start_date = pd.to_datetime(manual_start)
-                end_date = pd.to_datetime(manual_end)
+                    end_date = start_date + timedelta(days=1)
             else:
                 start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
-                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+                end_date = start_date + timedelta(days=1)
             
             task_dates[custom_task_name] = (start_date, end_date)
     
@@ -250,7 +248,6 @@ def auto_correct_weekend_dates(project_name):
     for task_name in get_all_tasks_for_project(project_name):
         override_key = f"{project_name}_{task_name}"
         
-        # Récupérer les dates actuelles (calculées ou overridées)
         if task_name in task_dates_dict:
             start_dt, end_dt = task_dates_dict[task_name]
             current_start = start_dt.date()
@@ -258,24 +255,20 @@ def auto_correct_weekend_dates(project_name):
         else:
             continue
         
-        # Vérifier si des corrections sont nécessaires
         needs_correction = False
         new_start = current_start
         new_end = current_end
         
-        # Correction WEEKEND sur date de début
         if is_weekend(current_start):
             new_start = get_next_weekday(current_start)
             needs_correction = True
             corrections_made.append(f"**{task_name}** : Début (weekend) {current_start.strftime('%d/%m')} → {new_start.strftime('%d/%m')}")
         
-        # Correction WEEKEND sur date de fin
         if is_weekend(current_end):
             new_end = get_previous_weekday(current_end)
             needs_correction = True
             corrections_made.append(f"**{task_name}** : Fin (weekend) {current_end.strftime('%d/%m')} → {new_end.strftime('%d/%m')}")
         
-        # Correction PROD vendredi
         if task_name == "PROD":
             if is_friday(new_start):
                 new_start = get_non_friday_date(new_start)
@@ -287,7 +280,6 @@ def auto_correct_weekend_dates(project_name):
                 needs_correction = True
                 corrections_made.append(f"**{task_name}** : Fin (vendredi) {current_end.strftime('%d/%m')} → {new_end.strftime('%d/%m (jeudi)')}")
         
-        # Appliquer les corrections si nécessaires
         if needs_correction:
             if override_key not in st.session_state.project_task_overrides:
                 st.session_state.project_task_overrides[override_key] = {}
@@ -295,15 +287,10 @@ def auto_correct_weekend_dates(project_name):
             st.session_state.project_task_overrides[override_key]["start_date"] = new_start
             st.session_state.project_task_overrides[override_key]["end_date"] = new_end
             
-            # Conserver la charge et les dépendances existantes
             if task_name in st.session_state.tasks_config:
-                if "charge" not in st.session_state.project_task_overrides[override_key]:
-                    st.session_state.project_task_overrides[override_key]["charge"] = st.session_state.tasks_config[task_name]["charge"]
                 if "depends_on" not in st.session_state.project_task_overrides[override_key]:
                     st.session_state.project_task_overrides[override_key]["depends_on"] = st.session_state.tasks_config[task_name]["depends_on"]
             elif task_name in st.session_state.custom_tasks:
-                if "charge" not in st.session_state.project_task_overrides[override_key]:
-                    st.session_state.project_task_overrides[override_key]["charge"] = st.session_state.custom_tasks[task_name]["charge"]
                 if "depends_on" not in st.session_state.project_task_overrides[override_key]:
                     st.session_state.project_task_overrides[override_key]["depends_on"] = st.session_state.custom_tasks[task_name].get("depends_on")
     
@@ -418,13 +405,6 @@ with st.sidebar:
 def get_tasks_list():
     return list(st.session_state.tasks_config.values())
 
-def get_task_charge_for_project(project_name, task_name):
-    """Récupère la charge d'une tâche pour un projet (override ou default)"""
-    override_key = f"{project_name}_{task_name}"
-    if override_key in st.session_state.project_task_overrides:
-        return st.session_state.project_task_overrides[override_key].get("charge", st.session_state.tasks_config.get(task_name, {}).get("charge", 1))
-    return st.session_state.tasks_config.get(task_name, {}).get("charge", 1)
-
 def get_task_depends_for_project(project_name, task_name):
     """Récupère la dépendance d'une tâche pour un projet (override ou default)"""
     override_key = f"{project_name}_{task_name}"
@@ -486,10 +466,7 @@ def calculate_planning():
                 continue
             
             start_date = first_iter_start
-            
-            task_charge = get_task_charge_for_project(project["name"], task["name"])
             task_depends = get_task_depends_for_project(project["name"], task["name"])
-            
             manual_start, manual_end = get_task_manual_dates(project["name"], task["name"])
             
             if manual_start and manual_end:
@@ -509,13 +486,12 @@ def calculate_planning():
                             "Équipe": task["team"],
                             "Début": None,
                             "Fin": None,
-                            "Charge": task_charge,
                             "Dépendance": task_depends,
                             "Statut": "❌ Bloqué"
                         })
                         continue
                 
-                end_date = start_date + timedelta(days=task_charge)
+                end_date = start_date + timedelta(days=1)
             
             task_key = f"{project['name']}_{task['name']}"
             task_dates[task_key] = (start_date, end_date)
@@ -527,7 +503,6 @@ def calculate_planning():
                 "Équipe": task["team"],
                 "Début": start_date.strftime("%Y-%m-%d"),
                 "Fin": end_date.strftime("%Y-%m-%d"),
-                "Charge": task_charge,
                 "Dépendance": task_depends,
                 "Statut": "✅ Planifié"
             })
@@ -536,7 +511,6 @@ def calculate_planning():
             if custom_task_name not in st.session_state.tasks_config:
                 if custom_task_name in st.session_state.custom_tasks:
                     custom_task = st.session_state.custom_tasks[custom_task_name]
-                    
                     manual_start, manual_end = get_task_manual_dates(project["name"], custom_task_name)
                     
                     if manual_start and manual_end:
@@ -544,7 +518,7 @@ def calculate_planning():
                         end_date = pd.to_datetime(manual_end)
                     else:
                         start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
-                        end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+                        end_date = start_date + timedelta(days=1)
                     
                     task_key = f"{project['name']}_{custom_task_name}"
                     task_dates[task_key] = (start_date, end_date)
@@ -556,7 +530,6 @@ def calculate_planning():
                         "Équipe": custom_task.get("team", "N/A"),
                         "Début": start_date.strftime("%Y-%m-%d"),
                         "Fin": end_date.strftime("%Y-%m-%d"),
-                        "Charge": custom_task.get("charge", 1),
                         "Dépendance": custom_task.get("depends_on", None),
                         "Statut": "✅ Planifié"
                     })
@@ -600,7 +573,7 @@ def create_gantt_chart(df_gantt, title="Gantt Chart"):
         y="Tâche",
         color="Équipe",
         color_discrete_map=TEAM_COLORS,
-        hover_data=["Équipe", "Charge", "Dépendance"],
+        hover_data=["Équipe", "Dépendance"],
         title=title,
         height=max(600, len(df_gantt) * 40)
     )
@@ -747,7 +720,6 @@ with tab_projects:
             if task["name"] not in all_project_tasks:
                 continue
             
-            charge = get_task_charge_for_project(selected_proj, task["name"])
             depends = get_task_depends_for_project(selected_proj, task["name"])
             
             if task["name"] in task_dates_dict:
@@ -756,7 +728,6 @@ with tab_projects:
                 project_gantt_data.append({
                     "Tâche": task["name"],
                     "Équipe": task["team"],
-                    "Charge": charge,
                     "Dépendance": depends if depends else "Aucune",
                     "Start Date": start_dt,
                     "End Date": end_dt
@@ -772,7 +743,6 @@ with tab_projects:
                     project_gantt_data.append({
                         "Tâche": custom_task_name,
                         "Équipe": custom_task.get("team", "N/A"),
-                        "Charge": custom_task.get("charge", 1),
                         "Dépendance": custom_task.get("depends_on", "Aucune") if custom_task.get("depends_on") else "Aucune",
                         "Start Date": start_dt,
                         "End Date": end_dt
@@ -799,7 +769,6 @@ with tab_projects:
             if task["name"] not in all_project_tasks:
                 continue
             
-            charge = get_task_charge_for_project(selected_proj, task["name"])
             depends = get_task_depends_for_project(selected_proj, task["name"])
             
             if task["name"] in task_dates_dict:
@@ -817,7 +786,6 @@ with tab_projects:
                 "🗑️": False,
                 "Tâche": task["name"],
                 "Équipe": task["team"],
-                "Charge (j)": charge,
                 "Début": start_date,
                 "Fin": end_date,
                 "Dépend de": depends if depends else "(Aucune)"
@@ -843,7 +811,6 @@ with tab_projects:
                     "🗑️": False,
                     "Tâche": custom_task_name,
                     "Équipe": custom_task.get("team", "N/A"),
-                    "Charge (j)": custom_task.get("charge", 1),
                     "Début": start_date,
                     "Fin": end_date,
                     "Dépend de": custom_task.get("depends_on", "(Aucune)") if custom_task.get("depends_on") else "(Aucune)"
@@ -864,7 +831,6 @@ with tab_projects:
                 "🗑️": st.column_config.CheckboxColumn("🗑️", help="Cocher pour supprimer", width="small"),
                 "Tâche": st.column_config.TextColumn(disabled=True, width="large"),
                 "Équipe": st.column_config.TextColumn(disabled=True, width="medium"),
-                "Charge (j)": st.column_config.NumberColumn("Charge (j)", min_value=0.5, max_value=20, step=0.5, width="small"),
                 "Début": st.column_config.DateColumn("Début", format="DD/MM/YYYY", width="small"),
                 "Fin": st.column_config.DateColumn("Fin", format="DD/MM/YYYY", width="small"),
                 "Dépend de": st.column_config.SelectboxColumn(
@@ -893,17 +859,13 @@ with tab_projects:
                 
                 if task_name in st.session_state.tasks_config:
                     original_task = st.session_state.tasks_config[task_name]
-                    original_charge = original_task["charge"]
                     original_depends = original_task["depends_on"]
                 else:
                     if task_name in st.session_state.custom_tasks:
-                        original_charge = st.session_state.custom_tasks[task_name]["charge"]
                         original_depends = st.session_state.custom_tasks[task_name].get("depends_on")
                     else:
-                        original_charge = 1
                         original_depends = None
                 
-                new_charge = row["Charge (j)"]
                 new_depends = None if row["Dépend de"] == "(Aucune)" else row["Dépend de"]
                 new_start = row["Début"]
                 new_end = row["Fin"]
@@ -911,8 +873,7 @@ with tab_projects:
                 if override_key not in st.session_state.project_task_overrides:
                     st.session_state.project_task_overrides[override_key] = {}
                 
-                if new_charge != original_charge or new_depends != original_depends:
-                    st.session_state.project_task_overrides[override_key]["charge"] = new_charge
+                if new_depends != original_depends:
                     st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
                 
                 if new_start != original_start or new_end != original_end:
@@ -966,16 +927,13 @@ with tab_projects:
         
         st.markdown("**➕ Créer une Tâche Personnalisée**")
         
-        col_name, col_team, col_charge = st.columns(3)
+        col_name, col_team = st.columns(2)
         
         with col_name:
             new_task_name = st.text_input("📝 Nom de la tâche", placeholder="Ex: Migration BDD", key=f"new_task_name_{selected_proj}")
         
         with col_team:
             new_task_team = st.selectbox("👥 Équipe responsable", options=TEAMS, key=f"new_task_team_{selected_proj}")
-        
-        with col_charge:
-            new_task_charge = st.number_input("📅 Charge (jours)", min_value=0.5, max_value=20.0, step=0.5, value=1.0, key=f"new_task_charge_{selected_proj}")
         
         col_dep = st.columns(1)[0]
         
@@ -987,7 +945,6 @@ with tab_projects:
             if new_task_name:
                 st.session_state.custom_tasks[new_task_name] = {
                     "team": new_task_team,
-                    "charge": new_task_charge,
                     "start_date": ITERATIONS[0]["start"],
                     "depends_on": None if new_task_dep == "(Aucune)" else new_task_dep
                 }
@@ -1076,14 +1033,14 @@ with tab_planning:
             
             st.markdown("### 📊 Tableau détaillé")
             
-            display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Charge", "Dépendance", "Statut"]
+            display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Dépendance", "Statut"]
             
             col_sort1, col_sort2 = st.columns([2, 1])
             
             with col_sort1:
                 sort_by = st.selectbox(
                     "Trier par",
-                    options=["Priorité", "Projet", "Équipe", "Début", "Charge"],
+                    options=["Priorité", "Projet", "Équipe", "Début"],
                     index=0,
                     key="sort_by_global"
                 )
@@ -1182,15 +1139,12 @@ with tab_today:
     if not df_week.empty:
         df_week = df_week.sort_values(["Priorité", "Start Date"])
         
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("📊 Projets actifs", df_week["Projet"].nunique())
         with col2:
             st.metric("📋 Tâches totales", len(df_week))
         with col3:
-            charge_totale = df_week["Charge"].sum()
-            st.metric("⏱️ Charge totale", f"{charge_totale:.1f}j")
-        with col4:
             teams_week = df_week["Équipe"].nunique()
             st.metric("👥 Équipes", teams_week)
         
@@ -1223,8 +1177,7 @@ with tab_today:
                         "Tâche": task["Tâche"],
                         "Équipe": task["Équipe"],
                         "Début": task_start.strftime("%d/%m"),
-                        "Fin": task_end.strftime("%d/%m"),
-                        "Charge": f"{task['Charge']}j"
+                        "Fin": task_end.strftime("%d/%m")
                     })
                 
                 df_table = pd.DataFrame(table_data)
@@ -1238,8 +1191,7 @@ with tab_today:
                         "Tâche": st.column_config.TextColumn("Tâche", width="large"),
                         "Équipe": st.column_config.TextColumn("Équipe", width="medium"),
                         "Début": st.column_config.TextColumn("Début", width="small"),
-                        "Fin": st.column_config.TextColumn("Fin", width="small"),
-                        "Charge": st.column_config.TextColumn("Charge", width="small"),
+                        "Fin": st.column_config.TextColumn("Fin", width="small")
                     }
                 )
                 
@@ -1253,23 +1205,6 @@ with tab_today:
                 with col_c:
                     a_venir = len([t for t in table_data if t["Statut"] == "⏳ À venir"])
                     st.caption(f"⏳ À venir : {a_venir}")
-        
-        st.divider()
-        
-        st.markdown("### 👥 Charge par équipe cette semaine")
-        
-        team_workload = df_week.groupby("Équipe")["Charge"].sum().sort_values(ascending=False)
-        
-        col_teams = st.columns(min(4, len(team_workload)))
-        
-        for idx, (team, charge) in enumerate(team_workload.items()):
-            with col_teams[idx % len(col_teams)]:
-                team_color = TEAM_COLORS.get(team, "#999999")
-                st.markdown(
-                    f"<div style='background-color: {team_color}; color: white; padding: 10px; border-radius: 8px; text-align: center;'>"
-                    f"<strong>{team}</strong><br>{charge:.1f} jours</div>",
-                    unsafe_allow_html=True
-                )
         
     else:
         st.warning("📭 Aucune tâche planifiée cette semaine")
