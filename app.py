@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v7.0", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v7.1", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -330,38 +330,44 @@ def calculate_planning():
     return planning, task_dates
 
 def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
-    """Crée un Gantt pour un projet individuel avec tâches commencées en vert"""
+    """Crée un Gantt pour un projet individuel avec tâches terminées en vert"""
     if df_gantt.empty:
         return None
     
-    # Ajouter une colonne de statut (commencé ou non)
+    # Ajouter une colonne de statut (terminé ou non) basée sur END DATE
     today = pd.to_datetime(datetime.now().date())
-    df_gantt["Statut_Tâche"] = df_gantt["Start Date"].apply(
-        lambda x: "✅ Commencée" if pd.to_datetime(x) < today else "⏳ À venir"
+    df_gantt["Statut_Tâche"] = df_gantt["End Date"].apply(
+        lambda x: "✅ Terminée" if pd.to_datetime(x) < today else "⏳ En cours / À venir"
     )
     
-    # Palette de couleurs : vert pour commencé, couleurs équipe pour à venir
+    # Créer le graphique
     fig = go.Figure()
     
     for idx, row in df_gantt.iterrows():
-        if row["Statut_Tâche"] == "✅ Commencée":
+        # Tâche terminée = vert, sinon couleur équipe
+        if row["Statut_Tâche"] == "✅ Terminée":
             color = "#28A745"  # Vert
         else:
             color = TEAM_COLORS.get(row["Équipe"], "#999999")
         
+        # Calculer la durée
+        duration = row["End Date"] - row["Start Date"]
+        
         fig.add_trace(go.Bar(
-            x=[row["End Date"] - row["Start Date"]],
+            x=[duration],
             y=[row["Tâche"]],
             base=row["Start Date"],
             orientation='h',
             marker=dict(color=color),
             name=row["Équipe"],
             showlegend=False,
-            hovertemplate=f"<b>{row['Tâche']}</b><br>" +
-                         f"Équipe: {row['Équipe']}<br>" +
-                         f"Charge: {row['Charge']}j<br>" +
-                         f"Dépendance: {row['Dépendance']}<br>" +
-                         f"Statut: {row['Statut_Tâche']}<extra></extra>"
+            hovertemplate=(
+                f"<b>{row['Tâche']}</b><br>" +
+                f"Équipe: {row['Équipe']}<br>" +
+                f"Charge: {row['Charge']}j<br>" +
+                f"Dépendance: {row.get('Dépendance', 'Aucune')}<br>" +
+                f"Statut: {row['Statut_Tâche']}<extra></extra>"
+            )
         ))
     
     # Ajouter les itérations
@@ -920,4 +926,4 @@ with tab_capa:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v7.0** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v7.1** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
