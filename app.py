@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v6.1", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v6.3", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -140,6 +140,15 @@ def get_task_depends_for_project(project_name, task_name):
         return st.session_state.project_task_overrides[override_key].get("depends_on", st.session_state.tasks_config.get(task_name, {}).get("depends_on"))
     return st.session_state.tasks_config.get(task_name, {}).get("depends_on")
 
+def get_task_manual_dates(project_name, task_name):
+    """Récupère les dates manuelles si elles existent"""
+    override_key = f"{project_name}_{task_name}"
+    if override_key in st.session_state.project_task_overrides:
+        start_date = st.session_state.project_task_overrides[override_key].get("start_date")
+        end_date = st.session_state.project_task_overrides[override_key].get("end_date")
+        return start_date, end_date
+    return None, None
+
 def calculate_dates_for_project(project_name):
     """Calcule les dates de début et fin pour chaque tâche d'un projet"""
     TASKS = get_tasks_list()
@@ -152,27 +161,45 @@ def calculate_dates_for_project(project_name):
         if task["name"] not in project_task_names:
             continue
         
-        start_date = first_iter_start
+        # Vérifier si des dates manuelles existent
+        manual_start, manual_end = get_task_manual_dates(project_name, task["name"])
         
-        task_charge = get_task_charge_for_project(project_name, task["name"])
-        task_depends = get_task_depends_for_project(project_name, task["name"])
+        if manual_start and manual_end:
+            # Utiliser les dates manuelles
+            start_date = pd.to_datetime(manual_start)
+            end_date = pd.to_datetime(manual_end)
+        else:
+            # Calculer automatiquement
+            start_date = first_iter_start
+            
+            task_charge = get_task_charge_for_project(project_name, task["name"])
+            task_depends = get_task_depends_for_project(project_name, task["name"])
+            
+            if task_depends:
+                if task_depends in task_dates:
+                    _, parent_end_date = task_dates[task_depends]
+                    start_date = parent_end_date + timedelta(days=1)
+                else:
+                    start_date = first_iter_start
+            
+            end_date = start_date + timedelta(days=task_charge)
         
-        if task_depends:
-            if task_depends in task_dates:
-                _, parent_end_date = task_dates[task_depends]
-                start_date = parent_end_date + timedelta(days=1)
-            else:
-                start_date = first_iter_start
-        
-        end_date = start_date + timedelta(days=task_charge)
         task_dates[task["name"]] = (start_date, end_date)
     
     # Ajouter les tâches custom
     for custom_task_name in st.session_state.projects_tasks.get(project_name, {}).get("custom", []):
         if custom_task_name in st.session_state.custom_tasks:
             custom_task = st.session_state.custom_tasks[custom_task_name]
-            start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
-            end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+            
+            manual_start, manual_end = get_task_manual_dates(project_name, custom_task_name)
+            
+            if manual_start and manual_end:
+                start_date = pd.to_datetime(manual_start)
+                end_date = pd.to_datetime(manual_end)
+            else:
+                start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
+                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+            
             task_dates[custom_task_name] = (start_date, end_date)
     
     return task_dates
@@ -199,26 +226,33 @@ def calculate_planning():
             task_charge = get_task_charge_for_project(project["name"], task["name"])
             task_depends = get_task_depends_for_project(project["name"], task["name"])
             
-            if task_depends:
-                parent_key = f"{project['name']}_{task_depends}"
-                if parent_key in task_dates:
-                    _, parent_end_date = task_dates[parent_key]
-                    start_date = parent_end_date + timedelta(days=1)
-                else:
-                    planning.append({
-                        "Priorité": project["priority"],
-                        "Projet": project["name"],
-                        "Tâche": task["name"],
-                        "Équipe": task["team"],
-                        "Début": None,
-                        "Fin": None,
-                        "Charge": task_charge,
-                        "Dépendance": task_depends,
-                        "Statut": "❌ Bloqué"
-                    })
-                    continue
+            # Vérifier dates manuelles
+            manual_start, manual_end = get_task_manual_dates(project["name"], task["name"])
             
-            end_date = start_date + timedelta(days=task_charge)
+            if manual_start and manual_end:
+                start_date = pd.to_datetime(manual_start)
+                end_date = pd.to_datetime(manual_end)
+            else:
+                if task_depends:
+                    parent_key = f"{project['name']}_{task_depends}"
+                    if parent_key in task_dates:
+                        _, parent_end_date = task_dates[parent_key]
+                        start_date = parent_end_date + timedelta(days=1)
+                    else:
+                        planning.append({
+                            "Priorité": project["priority"],
+                            "Projet": project["name"],
+                            "Tâche": task["name"],
+                            "Équipe": task["team"],
+                            "Début": None,
+                            "Fin": None,
+                            "Charge": task_charge,
+                            "Dépendance": task_depends,
+                            "Statut": "❌ Bloqué"
+                        })
+                        continue
+                
+                end_date = start_date + timedelta(days=task_charge)
             
             task_key = f"{project['name']}_{task['name']}"
             task_dates[task_key] = (start_date, end_date)
@@ -240,8 +274,14 @@ def calculate_planning():
                 if custom_task_name in st.session_state.custom_tasks:
                     custom_task = st.session_state.custom_tasks[custom_task_name]
                     
-                    start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
-                    end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+                    manual_start, manual_end = get_task_manual_dates(project["name"], custom_task_name)
+                    
+                    if manual_start and manual_end:
+                        start_date = pd.to_datetime(manual_start)
+                        end_date = pd.to_datetime(manual_end)
+                    else:
+                        start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
+                        end_date = start_date + timedelta(days=custom_task.get("charge", 1))
                     
                     task_key = f"{project['name']}_{custom_task_name}"
                     task_dates[task_key] = (start_date, end_date)
@@ -259,6 +299,101 @@ def calculate_planning():
                     })
     
     return planning, task_dates
+
+def create_gantt_with_dependencies(df_gantt, project_name):
+    """Crée un Gantt avec flèches de dépendances"""
+    if df_gantt.empty:
+        return None
+    
+    fig = px.timeline(
+        df_gantt, 
+        x_start="Start Date", 
+        x_end="End Date", 
+        y="Tâche",
+        color="Équipe",
+        color_discrete_map=TEAM_COLORS,
+        hover_data=["Équipe", "Charge", "Dépendance"],
+        title=f"📅 Gantt: {project_name}",
+        height=max(400, len(df_gantt) * 45)
+    )
+    
+    # Ajouter les itérations
+    colors_bg = ["rgba(230, 230, 230, 0.3)", "rgba(200, 230, 255, 0.3)", "rgba(220, 255, 220, 0.3)"]
+    for i, it in enumerate(ITERATIONS):
+        fig.add_vrect(
+            x0=it["start"], x1=it["end"],
+            fillcolor=colors_bg[i % len(colors_bg)], 
+            layer="below", line_width=0,
+            annotation_text=f"<b>{it['name']}</b>", 
+            annotation_position="top left",
+            annotation_font_size=13
+        )
+        fig.add_vline(x=it["end"], line_width=2, line_dash="dot", line_color="gray")
+    
+    # Ajouter les jours fériés
+    for hol_date in HOLIDAYS_2026:
+        start_hol = pd.to_datetime(hol_date)
+        end_hol = start_hol + timedelta(days=1)
+        fig.add_vrect(
+            x0=start_hol, x1=end_hol,
+            fillcolor="rgba(255, 0, 0, 0.2)",
+            line_width=0,
+            annotation_text="Férié",
+            annotation_position="bottom right",
+            annotation_font_color="red",
+            annotation_font_size=10
+        )
+    
+    # Créer un mapping tâche -> position Y
+    task_list = df_gantt["Tâche"].tolist()
+    task_y_positions = {task: len(task_list) - 1 - idx for idx, task in enumerate(task_list)}
+    
+    # Ajouter les flèches de dépendances
+    for idx, row in df_gantt.iterrows():
+        if row["Dépendance"] and row["Dépendance"] in task_y_positions:
+            parent_task = row["Dépendance"]
+            parent_y = task_y_positions[parent_task]
+            
+            current_task = row["Tâche"]
+            current_y = task_y_positions[current_task]
+            
+            parent_row = df_gantt[df_gantt["Tâche"] == parent_task]
+            if not parent_row.empty:
+                parent_end = parent_row.iloc[0]["End Date"]
+                current_start = row["Start Date"]
+                
+                fig.add_annotation(
+                    x=parent_end,
+                    y=parent_y,
+                    ax=current_start,
+                    ay=current_y,
+                    xref="x",
+                    yref="y",
+                    axref="x",
+                    ayref="y",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1,
+                    arrowwidth=2,
+                    arrowcolor="rgba(100, 100, 100, 0.6)",
+                    standoff=5,
+                    startstandoff=5
+                )
+
+    first_iteration_start = ITERATIONS[0]["start"]
+    last_iteration_end = ITERATIONS[-1]["end"]
+    
+    fig.update_xaxes(
+        range=[first_iteration_start, last_iteration_end],
+        tickformat="%a %d/%m",
+        dtick=86400000.0,
+        side="top",
+        tickfont=dict(size=11),
+        rangebreaks=[dict(bounds=["sat", "mon"])]
+    )
+    fig.update_yaxes(autorange="reversed")
+    
+    return fig
 
 # Calcul planning
 planning, task_dates = calculate_planning()
@@ -292,6 +427,59 @@ with tab_projects:
         
         all_project_tasks = get_all_tasks_for_project(selected_proj)
         task_dates_dict = calculate_dates_for_project(selected_proj)
+        
+        # ═════════════════════════════════════════════════════════════════════════
+        # GANTT EN HAUT
+        # ═════════════════════════════════════════════════════════════════════════
+        
+        # Préparer les données pour le Gantt du projet
+        project_gantt_data = []
+        for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
+            if task["name"] not in all_project_tasks:
+                continue
+            
+            charge = get_task_charge_for_project(selected_proj, task["name"])
+            depends = get_task_depends_for_project(selected_proj, task["name"])
+            
+            if task["name"] in task_dates_dict:
+                start_dt, end_dt = task_dates_dict[task["name"]]
+                
+                project_gantt_data.append({
+                    "Tâche": task["name"],
+                    "Équipe": task["team"],
+                    "Charge": charge,
+                    "Dépendance": depends,
+                    "Start Date": start_dt,
+                    "End Date": end_dt
+                })
+        
+        # Ajouter les tâches custom
+        for custom_task_name in st.session_state.projects_tasks.get(selected_proj, {}).get("custom", []):
+            if custom_task_name in st.session_state.custom_tasks:
+                custom_task = st.session_state.custom_tasks[custom_task_name]
+                
+                if custom_task_name in task_dates_dict:
+                    start_dt, end_dt = task_dates_dict[custom_task_name]
+                    
+                    project_gantt_data.append({
+                        "Tâche": custom_task_name,
+                        "Équipe": custom_task.get("team", "N/A"),
+                        "Charge": custom_task.get("charge", 1),
+                        "Dépendance": custom_task.get("depends_on", None),
+                        "Start Date": start_dt,
+                        "End Date": end_dt
+                    })
+        
+        df_project_gantt = pd.DataFrame(project_gantt_data)
+        
+        if not df_project_gantt.empty:
+            fig_gantt = create_gantt_with_dependencies(df_project_gantt, selected_proj)
+            if fig_gantt:
+                st.plotly_chart(fig_gantt, use_container_width=True)
+        else:
+            st.info("Aucune tâche à afficher dans le Gantt")
+        
+        st.divider()
         
         # ═════════════════════════════════════════════════════════════════════════
         # TABLEAU ÉDITABLE - AVEC DATES ÉDITABLES, DÉPENDANCES, SUPPRESSION
@@ -379,6 +567,7 @@ with tab_projects:
         )
         
         # Traiter les changements
+        dates_changed = False
         for idx, row in edited_config.iterrows():
             task_name = row["Tâche"]
             
@@ -386,6 +575,14 @@ with tab_projects:
                 override_key = f"{selected_proj}_{task_name}"
                 
                 # Récupérer les valeurs originales
+                if task_name in task_dates_dict:
+                    original_start_dt, original_end_dt = task_dates_dict[task_name]
+                    original_start = original_start_dt.date()
+                    original_end = original_end_dt.date()
+                else:
+                    original_start = date(2026, 1, 12)
+                    original_end = date(2026, 1, 12)
+                
                 if task_name in st.session_state.tasks_config:
                     original_task = st.session_state.tasks_config[task_name]
                     original_charge = original_task["charge"]
@@ -400,14 +597,27 @@ with tab_projects:
                 
                 new_charge = row["Charge (j)"]
                 new_depends = None if row["Dépend de"] == "(Aucune)" else row["Dépend de"]
+                new_start = row["Début"]
+                new_end = row["Fin"]
                 
-                # Si différent de l'original, stocker comme override
+                # Créer l'override si nécessaire
+                if override_key not in st.session_state.project_task_overrides:
+                    st.session_state.project_task_overrides[override_key] = {}
+                
+                # Détecter les changements
                 if new_charge != original_charge or new_depends != original_depends:
-                    if override_key not in st.session_state.project_task_overrides:
-                        st.session_state.project_task_overrides[override_key] = {}
-                    
                     st.session_state.project_task_overrides[override_key]["charge"] = new_charge
                     st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
+                
+                # Détecter les changements de dates
+                if new_start != original_start or new_end != original_end:
+                    st.session_state.project_task_overrides[override_key]["start_date"] = new_start
+                    st.session_state.project_task_overrides[override_key]["end_date"] = new_end
+                    dates_changed = True
+        
+        # Si des dates ont changé, recalculer et rerun
+        if dates_changed:
+            st.rerun()
         
         # Bouton pour supprimer les tâches cochées
         tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
@@ -522,62 +732,12 @@ with tab_planning:
         df_filtered = df_plan[df_plan["Projet"] == selected_project].copy()
         
         if not df_filtered.empty:
-            st.subheader(f"📅 Gantt: {selected_project}")
-            
             df_gantt = df_filtered.dropna(subset=["Start Date", "End Date"]).copy()
             
             if not df_gantt.empty:
-                fig = px.timeline(
-                    df_gantt, 
-                    x_start="Start Date", 
-                    x_end="End Date", 
-                    y="Tâche",
-                    color="Équipe",
-                    color_discrete_map=TEAM_COLORS,
-                    hover_data=["Équipe", "Charge", "Dépendance"],
-                    title=f"Planning: {selected_project}",
-                    height=max(400, len(df_gantt) * 45)
-                )
-                
-                colors_bg = ["rgba(230, 230, 230, 0.3)", "rgba(200, 230, 255, 0.3)", "rgba(220, 255, 220, 0.3)"]
-                for i, it in enumerate(ITERATIONS):
-                    fig.add_vrect(
-                        x0=it["start"], x1=it["end"],
-                        fillcolor=colors_bg[i % len(colors_bg)], 
-                        layer="below", line_width=0,
-                        annotation_text=f"<b>{it['name']}</b>", 
-                        annotation_position="top left",
-                        annotation_font_size=13
-                    )
-                    fig.add_vline(x=it["end"], line_width=2, line_dash="dot", line_color="gray")
-                
-                for hol_date in HOLIDAYS_2026:
-                    start_hol = pd.to_datetime(hol_date)
-                    end_hol = start_hol + timedelta(days=1)
-                    fig.add_vrect(
-                        x0=start_hol, x1=end_hol,
-                        fillcolor="rgba(255, 0, 0, 0.2)",
-                        line_width=0,
-                        annotation_text="Férié",
-                        annotation_position="bottom right",
-                        annotation_font_color="red",
-                        annotation_font_size=10
-                    )
-
-                first_iteration_start = ITERATIONS[0]["start"]
-                last_iteration_end = ITERATIONS[-1]["end"]
-                
-                fig.update_xaxes(
-                    range=[first_iteration_start, last_iteration_end],
-                    tickformat="%a %d/%m",
-                    dtick=86400000.0,
-                    side="top",
-                    tickfont=dict(size=11),
-                    rangebreaks=[dict(bounds=["sat", "mon"])]
-                )
-                fig.update_yaxes(autorange="reversed")
-                
-                st.plotly_chart(fig, use_container_width=True)
+                fig = create_gantt_with_dependencies(df_gantt, selected_project)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
             else:
                 st.warning("⚠️ Aucune tâche avec dates valides.")
 
@@ -656,4 +816,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v6.1** (Editable Dates + Checkbox Delete) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v6.3** (Real-time Dependencies Update) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
