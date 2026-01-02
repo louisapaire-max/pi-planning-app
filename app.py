@@ -741,9 +741,9 @@ with tab_projects:
     if selected_proj:
         st.markdown(f"#### Projet: **{selected_proj}**")
         
-        # Compteur d'erreurs de validation
-        all_project_tasks = get_all_tasks_for_project(selected_proj)
+        # RECALCUL INITIAL des dates pour ce projet
         task_dates_dict = calculate_dates_for_project(selected_proj)
+        all_project_tasks = get_all_tasks_for_project(selected_proj)
         
         error_count = 0
         for task_name in all_project_tasks:
@@ -753,7 +753,7 @@ with tab_projects:
                 if "🔴" in validation:
                     error_count += 1
         
-        # BANNIÈRE D'ALERTE - Ne s'affiche QUE si erreurs détectées
+        # BANNIÈRE D'ALERTE
         if error_count > 0:
             col_alert1, col_alert2 = st.columns([3, 1])
             
@@ -775,6 +775,7 @@ with tab_projects:
         st.markdown("**📋 Configuration des Tâches**")
         st.info("📌 **Contraintes** : Refinement & Etude d'impact → Mercredi | PROD → **Pas de vendredi** | **Pas de weekend autorisé**")
         
+        # CRÉER LE DATAFRAME AVEC LES DATES CALCULÉES
         config_data = []
         task_order = []
         
@@ -834,6 +835,7 @@ with tab_projects:
         
         all_project_tasks_for_selector = get_all_tasks_for_project(selected_proj)
         
+        # DATA EDITOR
         edited_config = st.data_editor(
             df_config,
             use_container_width=True,
@@ -854,6 +856,7 @@ with tab_projects:
             }
         )
         
+        # DÉTECTER LES MODIFICATIONS
         dates_changed = False
         depends_changed = False
         
@@ -863,6 +866,7 @@ with tab_projects:
             if task_name in task_order:
                 override_key = f"{selected_proj}_{task_name}"
                 
+                # Récupérer les valeurs originales depuis task_dates_dict (PAS depuis le df)
                 if task_name in task_dates_dict:
                     original_start_dt, original_end_dt = task_dates_dict[task_name]
                     original_start = original_start_dt.date()
@@ -887,25 +891,31 @@ with tab_projects:
                 if override_key not in st.session_state.project_task_overrides:
                     st.session_state.project_task_overrides[override_key] = {}
                 
+                # Détecter changement de dépendance
                 if new_depends != original_depends:
                     st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
                     depends_changed = True
                 
+                # Détecter changement de dates
                 if new_start != original_start or new_end != original_end:
                     st.session_state.project_task_overrides[override_key]["start_date"] = new_start
                     st.session_state.project_task_overrides[override_key]["end_date"] = new_end
                     dates_changed = True
         
-        # Afficher un message si des modifications ont été faites
+        # Message de confirmation + bouton de recalcul
         if dates_changed or depends_changed:
-            st.info("💾 Modifications enregistrées - Le Gantt ci-dessous est mis à jour automatiquement")
-        
-        # RECALCULER LES DATES APRÈS LES MODIFICATIONS
-        task_dates_dict_updated = calculate_dates_for_project(selected_proj)
+            col_info1, col_info2 = st.columns([3, 1])
+            with col_info1:
+                st.success("✅ Modifications enregistrées")
+            with col_info2:
+                if st.button("🔄 Recalculer", key=f"recalc_{selected_proj}", use_container_width=True):
+                    st.rerun()
         
         st.divider()
         
-        # GANTT AVEC LES NOUVELLES DONNÉES
+        # GANTT - RECALCULÉ APRÈS LES MODIFICATIONS
+        task_dates_dict_updated = calculate_dates_for_project(selected_proj)
+        
         project_gantt_data = []
         for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
             if task["name"] not in all_project_tasks:
