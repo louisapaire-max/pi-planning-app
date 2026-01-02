@@ -174,42 +174,138 @@ def get_non_friday_date(date_obj):
     
     return date_obj
 
+def get_all_tasks_for_project(project_name):
+    """Récupère TOUS les noms de tâches (default + custom) pour un projet"""
+    default_tasks = st.session_state.projects_tasks.get(project_name, {}).get("default", [])
+    custom_tasks = st.session_state.projects_tasks.get(project_name, {}).get("custom", [])
+    return default_tasks + custom_tasks
+
+def calculate_dates_for_project(project_name):
+    """Calcule les dates de début et fin pour chaque tâche d'un projet"""
+    TASKS = get_tasks_list()
+    project_task_names = get_all_tasks_for_project(project_name)
+    
+    task_dates = {}
+    first_iter_start = pd.to_datetime(ITERATIONS[0]["start"])
+    
+    for task in sorted(TASKS, key=lambda t: t["order"]):
+        if task["name"] not in project_task_names:
+            continue
+        
+        manual_start, manual_end = get_task_manual_dates(project_name, task["name"])
+        
+        task_charge = get_task_charge_for_project(project_name, task["name"])
+        task_depends = get_task_depends_for_project(project_name, task["name"])
+        
+        if task_depends:
+            if task_depends in task_dates:
+                _, parent_end_date = task_dates[task_depends]
+                start_date = parent_end_date + timedelta(days=1)
+                start_date = pd.to_datetime(get_next_weekday(start_date.date()))
+            else:
+                start_date = first_iter_start
+            
+            end_date = start_date + timedelta(days=task_charge)
+        elif manual_start and manual_end:
+            start_date = pd.to_datetime(manual_start)
+            end_date = pd.to_datetime(manual_end)
+        else:
+            start_date = first_iter_start
+            end_date = start_date + timedelta(days=task_charge)
+        
+        task_dates[task["name"]] = (start_date, end_date)
+    
+    for custom_task_name in st.session_state.projects_tasks.get(project_name, {}).get("custom", []):
+        if custom_task_name in st.session_state.custom_tasks:
+            custom_task = st.session_state.custom_tasks[custom_task_name]
+            
+            manual_start, manual_end = get_task_manual_dates(project_name, custom_task_name)
+            task_depends = custom_task.get("depends_on")
+            
+            if task_depends:
+                if task_depends in task_dates:
+                    _, parent_end_date = task_dates[task_depends]
+                    start_date = parent_end_date + timedelta(days=1)
+                    start_date = pd.to_datetime(get_next_weekday(start_date.date()))
+                else:
+                    start_date = pd.to_datetime(ITERATIONS[0]["start"])
+                
+                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+            elif manual_start and manual_end:
+                start_date = pd.to_datetime(manual_start)
+                end_date = pd.to_datetime(manual_end)
+            else:
+                start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
+                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+            
+            task_dates[custom_task_name] = (start_date, end_date)
+    
+    return task_dates
+
 def auto_correct_weekend_dates(project_name):
     """Corrige automatiquement toutes les dates de weekend et PROD vendredi pour un projet"""
     corrections_made = []
+    task_dates_dict = calculate_dates_for_project(project_name)
     
     for task_name in get_all_tasks_for_project(project_name):
         override_key = f"{project_name}_{task_name}"
         
-        if override_key in st.session_state.project_task_overrides:
-            start_date = st.session_state.project_task_overrides[override_key].get("start_date")
-            end_date = st.session_state.project_task_overrides[override_key].get("end_date")
+        # Récupérer les dates actuelles (calculées ou overridées)
+        if task_name in task_dates_dict:
+            start_dt, end_dt = task_dates_dict[task_name]
+            current_start = start_dt.date()
+            current_end = end_dt.date()
+        else:
+            continue
+        
+        # Vérifier si des corrections sont nécessaires
+        needs_correction = False
+        new_start = current_start
+        new_end = current_end
+        
+        # Correction WEEKEND sur date de début
+        if is_weekend(current_start):
+            new_start = get_next_weekday(current_start)
+            needs_correction = True
+            corrections_made.append(f"**{task_name}** : Début (weekend) {current_start.strftime('%d/%m')} → {new_start.strftime('%d/%m')}")
+        
+        # Correction WEEKEND sur date de fin
+        if is_weekend(current_end):
+            new_end = get_previous_weekday(current_end)
+            needs_correction = True
+            corrections_made.append(f"**{task_name}** : Fin (weekend) {current_end.strftime('%d/%m')} → {new_end.strftime('%d/%m')}")
+        
+        # Correction PROD vendredi
+        if task_name == "PROD":
+            if is_friday(new_start):
+                new_start = get_non_friday_date(new_start)
+                needs_correction = True
+                corrections_made.append(f"**{task_name}** : Début (vendredi) {current_start.strftime('%d/%m')} → {new_start.strftime('%d/%m (jeudi)')}")
             
-            # Correction WEEKEND
-            if start_date and is_weekend(start_date):
-                new_start = get_next_weekday(start_date)
-                st.session_state.project_task_overrides[override_key]["start_date"] = new_start
-                corrections_made.append(f"**{task_name}** : Début (weekend) {start_date.strftime('%d/%m')} → {new_start.strftime('%d/%m')}")
+            if is_friday(new_end):
+                new_end = get_non_friday_date(new_end)
+                needs_correction = True
+                corrections_made.append(f"**{task_name}** : Fin (vendredi) {current_end.strftime('%d/%m')} → {new_end.strftime('%d/%m (jeudi)')}")
+        
+        # Appliquer les corrections si nécessaires
+        if needs_correction:
+            if override_key not in st.session_state.project_task_overrides:
+                st.session_state.project_task_overrides[override_key] = {}
             
-            if end_date and is_weekend(end_date):
-                new_end = get_previous_weekday(end_date)
-                st.session_state.project_task_overrides[override_key]["end_date"] = new_end
-                corrections_made.append(f"**{task_name}** : Fin (weekend) {end_date.strftime('%d/%m')} → {new_end.strftime('%d/%m')}")
+            st.session_state.project_task_overrides[override_key]["start_date"] = new_start
+            st.session_state.project_task_overrides[override_key]["end_date"] = new_end
             
-            # Correction PROD vendredi
-            if task_name == "PROD":
-                current_start = st.session_state.project_task_overrides[override_key].get("start_date")
-                current_end = st.session_state.project_task_overrides[override_key].get("end_date")
-                
-                if current_start and is_friday(current_start):
-                    new_start = get_non_friday_date(current_start)
-                    st.session_state.project_task_overrides[override_key]["start_date"] = new_start
-                    corrections_made.append(f"**{task_name}** : Début (vendredi) {current_start.strftime('%d/%m')} → {new_start.strftime('%d/%m (jeudi)')}")
-                
-                if current_end and is_friday(current_end):
-                    new_end = get_non_friday_date(current_end)
-                    st.session_state.project_task_overrides[override_key]["end_date"] = new_end
-                    corrections_made.append(f"**{task_name}** : Fin (vendredi) {current_end.strftime('%d/%m')} → {new_end.strftime('%d/%m (jeudi)')}")
+            # Conserver la charge et les dépendances existantes
+            if task_name in st.session_state.tasks_config:
+                if "charge" not in st.session_state.project_task_overrides[override_key]:
+                    st.session_state.project_task_overrides[override_key]["charge"] = st.session_state.tasks_config[task_name]["charge"]
+                if "depends_on" not in st.session_state.project_task_overrides[override_key]:
+                    st.session_state.project_task_overrides[override_key]["depends_on"] = st.session_state.tasks_config[task_name]["depends_on"]
+            elif task_name in st.session_state.custom_tasks:
+                if "charge" not in st.session_state.project_task_overrides[override_key]:
+                    st.session_state.project_task_overrides[override_key]["charge"] = st.session_state.custom_tasks[task_name]["charge"]
+                if "depends_on" not in st.session_state.project_task_overrides[override_key]:
+                    st.session_state.project_task_overrides[override_key]["depends_on"] = st.session_state.custom_tasks[task_name].get("depends_on")
     
     return corrections_made
 
@@ -322,12 +418,6 @@ with st.sidebar:
 def get_tasks_list():
     return list(st.session_state.tasks_config.values())
 
-def get_all_tasks_for_project(project_name):
-    """Récupère TOUS les noms de tâches (default + custom) pour un projet"""
-    default_tasks = st.session_state.projects_tasks.get(project_name, {}).get("default", [])
-    custom_tasks = st.session_state.projects_tasks.get(project_name, {}).get("custom", [])
-    return default_tasks + custom_tasks
-
 def get_task_charge_for_project(project_name, task_name):
     """Récupère la charge d'une tâche pour un projet (override ou default)"""
     override_key = f"{project_name}_{task_name}"
@@ -377,68 +467,6 @@ def validate_task_day(task_name, start_date):
         return "✅"
     
     return "✅"
-
-def calculate_dates_for_project(project_name):
-    """Calcule les dates de début et fin pour chaque tâche d'un projet"""
-    TASKS = get_tasks_list()
-    project_task_names = get_all_tasks_for_project(project_name)
-    
-    task_dates = {}
-    first_iter_start = pd.to_datetime(ITERATIONS[0]["start"])
-    
-    for task in sorted(TASKS, key=lambda t: t["order"]):
-        if task["name"] not in project_task_names:
-            continue
-        
-        manual_start, manual_end = get_task_manual_dates(project_name, task["name"])
-        
-        task_charge = get_task_charge_for_project(project_name, task["name"])
-        task_depends = get_task_depends_for_project(project_name, task["name"])
-        
-        if task_depends:
-            if task_depends in task_dates:
-                _, parent_end_date = task_dates[task_depends]
-                start_date = parent_end_date + timedelta(days=1)
-                start_date = pd.to_datetime(get_next_weekday(start_date.date()))
-            else:
-                start_date = first_iter_start
-            
-            end_date = start_date + timedelta(days=task_charge)
-        elif manual_start and manual_end:
-            start_date = pd.to_datetime(manual_start)
-            end_date = pd.to_datetime(manual_end)
-        else:
-            start_date = first_iter_start
-            end_date = start_date + timedelta(days=task_charge)
-        
-        task_dates[task["name"]] = (start_date, end_date)
-    
-    for custom_task_name in st.session_state.projects_tasks.get(project_name, {}).get("custom", []):
-        if custom_task_name in st.session_state.custom_tasks:
-            custom_task = st.session_state.custom_tasks[custom_task_name]
-            
-            manual_start, manual_end = get_task_manual_dates(project_name, custom_task_name)
-            task_depends = custom_task.get("depends_on")
-            
-            if task_depends:
-                if task_depends in task_dates:
-                    _, parent_end_date = task_dates[task_depends]
-                    start_date = parent_end_date + timedelta(days=1)
-                    start_date = pd.to_datetime(get_next_weekday(start_date.date()))
-                else:
-                    start_date = pd.to_datetime(ITERATIONS[0]["start"])
-                
-                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
-            elif manual_start and manual_end:
-                start_date = pd.to_datetime(manual_start)
-                end_date = pd.to_datetime(manual_end)
-            else:
-                start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
-                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
-            
-            task_dates[custom_task_name] = (start_date, end_date)
-    
-    return task_dates
 
 def calculate_planning():
     """Calcul du planning global"""
