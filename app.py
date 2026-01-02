@@ -671,6 +671,7 @@ with tab_projects:
     if selected_proj:
         st.markdown(f"#### Projet: **{selected_proj}**")
         
+        # Compteur d'erreurs de validation
         all_project_tasks = get_all_tasks_for_project(selected_proj)
         task_dates_dict = calculate_dates_for_project(selected_proj)
         
@@ -682,22 +683,22 @@ with tab_projects:
                 if "🔴" in validation:
                     error_count += 1
         
+        # BANNIÈRE D'ALERTE - Ne s'affiche QUE si erreurs détectées
         if error_count > 0:
-            st.error(f"⚠️ **{error_count} erreur(s) de planning détectée(s)** : Dates en weekend ou PROD en vendredi")
-            
             col_alert1, col_alert2 = st.columns([3, 1])
+            
+            with col_alert1:
+                st.error(f"⚠️ **{error_count} erreur(s) de planning détectée(s)** : Dates en weekend ou PROD en vendredi")
             
             with col_alert2:
                 if st.button("🔧 Corriger automatiquement", type="primary", use_container_width=True, key=f"auto_correct_{selected_proj}"):
                     corrections = auto_correct_weekend_dates(selected_proj)
                     
                     if corrections:
-                        st.success(f"✅ {len(corrections)} correction(s) effectuée(s) :")
-                        for corr in corrections:
-                            st.info(corr)
+                        st.success(f"✅ {len(corrections)} correction(s) effectuée(s)")
                         st.rerun()
                     else:
-                        st.warning("Aucune correction nécessaire")
+                        st.info("Aucune erreur à corriger")
         
         st.divider()
         
