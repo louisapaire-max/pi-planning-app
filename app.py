@@ -675,3 +675,5 @@ with tab_projects:
         # CRÉER UNE TÂCHE PERSONNALISÉE
         # ═════════════════════════════════════════════════════════════════════════
         st.mark
+
+st.markdown(f"🛠 **PI Planning Tool v6.8** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
