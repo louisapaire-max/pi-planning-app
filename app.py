@@ -23,22 +23,34 @@ ITERATIONS = [
 ]
 
 TEAMS = [
-    "Product Owner", "Product unit", "QQE", "Marketing", "Design",
-    "Webmaster", "Dev Web Front", "Dev Web Back", "Dev Order",
-    "Tracking", "SEO", "QA", "Traduction"
+    "Product Owner", "Product Manager", "Project Manager", "Product unit", 
+    "COE (catalogue unifié)", "Marketing", "Design", "Webmaster", 
+    "Dev Web Front", "Dev Web Back", "Dev Order", "Tracking", 
+    "SEO", "QA", "Traduction"
 ]
 
 TEAM_COLORS = {
-    "Product Owner": "#FF6B6B", "Product unit": "#FF8C42", "QQE": "#FFC300",
-    "Marketing": "#FF1493", "Design": "#9D4EDD", "Webmaster": "#3A86FF",
-    "Dev Web Front": "#00D9FF", "Dev Web Back": "#0099FF", "Dev Order": "#2E7D32",
-    "Tracking": "#FFB703", "SEO": "#FB5607", "QA": "#8E44AD", "Traduction": "#1ABC9C"
+    "Product Owner": "#FF6B6B", 
+    "Product Manager": "#E74C3C",
+    "Project Manager": "#C0392B",
+    "Product unit": "#FF8C42", 
+    "COE (catalogue unifié)": "#FFC300",
+    "Marketing": "#FF1493", 
+    "Design": "#9D4EDD", 
+    "Webmaster": "#3A86FF",
+    "Dev Web Front": "#00D9FF", 
+    "Dev Web Back": "#0099FF", 
+    "Dev Order": "#2E7D32",
+    "Tracking": "#FFB703", 
+    "SEO": "#FB5607", 
+    "QA": "#8E44AD", 
+    "Traduction": "#1ABC9C"
 }
 
 TASKS_DEFAULT = [
     {"name": "Brief requester Delivery", "team": "Product Owner", "order": 1, "charge": 1, "depends_on": None},
     {"name": "Catalogue Delivery", "team": "Product unit", "order": 2, "charge": 2, "depends_on": "Brief requester Delivery"},
-    {"name": "Control d'interface", "team": "QQE", "order": 3, "charge": 1, "depends_on": "Catalogue Delivery"},
+    {"name": "Control d'interface", "team": "COE (catalogue unifié)", "order": 3, "charge": 1, "depends_on": "Catalogue Delivery"},
     {"name": "Content", "team": "Marketing", "order": 4, "charge": 2, "depends_on": "Brief requester Delivery"},
     {"name": "Documentation Project", "team": "Product Owner", "order": 5, "charge": 1, "depends_on": "Brief requester Delivery"},
     {"name": "Kick-off Digital", "team": "Product Owner", "order": 6, "charge": 0.5, "depends_on": "Brief requester Delivery"},
