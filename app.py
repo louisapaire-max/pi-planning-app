@@ -62,4 +62,5 @@ PROJECTS = [
     {"name": "Website Revamp - numbers page", "priority": 9, "status": "To Do"},
     {"name": "VOIP Offers - Update 40 Included Destinations", "priority": 10, "status": "To Do"},
     {"name": "Email - Website Quick Wins - Zimbra Webmail", "priority": 11, "status": "To Do"},
-    {"name": "Email - Website Quick Wins - New Ex
+    {"name": "Email - Website Quick Wins - New Exchange", "priority": 12, "status": "To Do"}
+]
