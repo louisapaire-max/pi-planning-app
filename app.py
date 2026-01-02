@@ -1021,4 +1021,6 @@ with tab_planning:
             
             st.divider()
             
-            csv_data = df_sorted[display_cols].to_csv(index=False, enco
+            csv_data = df_sorted[display_cols].to_csv(index=False, encoding='utf-8-sig')
+
+
