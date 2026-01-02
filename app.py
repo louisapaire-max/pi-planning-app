@@ -511,16 +511,25 @@ def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
             annotation_font_size=10
         )
     
-    today_timestamp = pd.Timestamp(datetime.now())
-    fig.add_vline(
-        x=today_timestamp,
-        line_width=3,
-        line_dash="solid",
-        line_color="rgb(255, 0, 0)",
-        annotation_text="📍 AUJOURD'HUI",
-        annotation_position="top",
-        annotation_font_size=12,
-        annotation_font_color="red"
+    today_str = datetime.now().date().isoformat()
+    fig.add_shape(
+        type="line",
+        x0=today_str,
+        x1=today_str,
+        y0=0,
+        y1=1,
+        yref="paper",
+        line=dict(color="red", width=3, dash="solid")
+    )
+    
+    fig.add_annotation(
+        x=today_str,
+        y=1,
+        yref="paper",
+        text="📍 AUJOURD'HUI",
+        showarrow=False,
+        yshift=10,
+        font=dict(size=12, color="red")
     )
 
     first_iteration_start = ITERATIONS[0]["start"]
@@ -585,16 +594,25 @@ def create_gantt_chart_global(df_gantt, title="Gantt Chart"):
             annotation_font_size=10
         )
     
-    today_timestamp = pd.Timestamp(datetime.now())
-    fig.add_vline(
-        x=today_timestamp,
-        line_width=3,
-        line_dash="solid",
-        line_color="rgb(255, 0, 0)",
-        annotation_text="📍 AUJOURD'HUI",
-        annotation_position="top",
-        annotation_font_size=12,
-        annotation_font_color="red"
+    today_str = datetime.now().date().isoformat()
+    fig.add_shape(
+        type="line",
+        x0=today_str,
+        x1=today_str,
+        y0=0,
+        y1=1,
+        yref="paper",
+        line=dict(color="red", width=3, dash="solid")
+    )
+    
+    fig.add_annotation(
+        x=today_str,
+        y=1,
+        yref="paper",
+        text="📍 AUJOURD'HUI",
+        showarrow=False,
+        yshift=10,
+        font=dict(size=12, color="red")
     )
 
     first_iteration_start = ITERATIONS[0]["start"]
