@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import json
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v7.5", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v7.6", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -136,7 +136,7 @@ def export_data():
                 overrides_export[key][k] = v
     
     data = {
-        "version": "7.5",
+        "version": "7.6",
         "export_date": datetime.now().isoformat(),
         "tasks_config": st.session_state.tasks_config,
         "projects_tasks": st.session_state.projects_tasks,
@@ -216,7 +216,7 @@ with st.sidebar:
             st.error(message)
     
     st.divider()
-    st.caption(f"Version 7.5 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    st.caption(f"Version 7.6 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FONCTIONS
@@ -537,17 +537,21 @@ def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
     
     fig.update_xaxes(
         range=[first_iteration_start, last_iteration_end],
-        tickformat="%a %d/%m",
-        dtick=86400000.0,
+        tickformat="%d/%m/%Y",
+        dtick=86400000.0 * 2,
         side="top",
-        tickfont=dict(size=11),
-        rangebreaks=[dict(bounds=["sat", "mon"])]
+        tickfont=dict(size=10),
+        tickangle=-45,
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='LightGray'
     )
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
         title=title,
-        height=max(400, len(df_gantt) * 45),
-        showlegend=False
+        height=max(500, len(df_gantt) * 50),
+        showlegend=False,
+        margin=dict(t=100, b=50)
     )
     
     return fig
@@ -979,18 +983,6 @@ with tab_planning:
             df_filtered = df_filtered[df_filtered["Tâche"].isin(selected_tasks)]
         
         if not df_filtered.empty:
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            
-            with col_m1:
-                st.metric("📊 Projets", df_filtered["Projet"].nunique())
-            with col_m2:
-                st.metric("📋 Tâches", len(df_filtered))
-            with col_m3:
-                charge_filtered = df_filtered["Charge"].sum()
-                st.metric("⏱️ Charge totale", f"{charge_filtered:.1f}j")
-            with col_m4:
-                st.metric("👥 Équipes", df_filtered["Équipe"].nunique())
-            
             st.divider()
             
             df_gantt_global = df_filtered.dropna(subset=["Start Date", "End Date"]).copy()
@@ -1278,4 +1270,4 @@ with tab_capa:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v7.5** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v7.6** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
