@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import json
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v7.6", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v7.7", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -136,7 +136,7 @@ def export_data():
                 overrides_export[key][k] = v
     
     data = {
-        "version": "7.6",
+        "version": "7.7",
         "export_date": datetime.now().isoformat(),
         "tasks_config": st.session_state.tasks_config,
         "projects_tasks": st.session_state.projects_tasks,
@@ -216,7 +216,7 @@ with st.sidebar:
             st.error(message)
     
     st.divider()
-    st.caption(f"Version 7.6 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    st.caption(f"Version 7.7 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FONCTIONS
@@ -292,22 +292,24 @@ def calculate_dates_for_project(project_name):
         
         manual_start, manual_end = get_task_manual_dates(project_name, task["name"])
         
-        if manual_start and manual_end:
+        task_charge = get_task_charge_for_project(project_name, task["name"])
+        task_depends = get_task_depends_for_project(project_name, task["name"])
+        
+        # Si dépendance, on FORCE le calcul automatique
+        if task_depends:
+            if task_depends in task_dates:
+                _, parent_end_date = task_dates[task_depends]
+                start_date = parent_end_date + timedelta(days=1)
+            else:
+                start_date = first_iter_start
+            
+            end_date = start_date + timedelta(days=task_charge)
+        # Si dates manuelles ET pas de dépendance, on les utilise
+        elif manual_start and manual_end:
             start_date = pd.to_datetime(manual_start)
             end_date = pd.to_datetime(manual_end)
         else:
             start_date = first_iter_start
-            
-            task_charge = get_task_charge_for_project(project_name, task["name"])
-            task_depends = get_task_depends_for_project(project_name, task["name"])
-            
-            if task_depends:
-                if task_depends in task_dates:
-                    _, parent_end_date = task_dates[task_depends]
-                    start_date = parent_end_date + timedelta(days=1)
-                else:
-                    start_date = first_iter_start
-            
             end_date = start_date + timedelta(days=task_charge)
         
         task_dates[task["name"]] = (start_date, end_date)
@@ -317,8 +319,18 @@ def calculate_dates_for_project(project_name):
             custom_task = st.session_state.custom_tasks[custom_task_name]
             
             manual_start, manual_end = get_task_manual_dates(project_name, custom_task_name)
+            task_depends = custom_task.get("depends_on")
             
-            if manual_start and manual_end:
+            # Même logique pour les tâches custom
+            if task_depends:
+                if task_depends in task_dates:
+                    _, parent_end_date = task_dates[task_depends]
+                    start_date = parent_end_date + timedelta(days=1)
+                else:
+                    start_date = pd.to_datetime(ITERATIONS[0]["start"])
+                
+                end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+            elif manual_start and manual_end:
                 start_date = pd.to_datetime(manual_start)
                 end_date = pd.to_datetime(manual_end)
             else:
@@ -800,6 +812,8 @@ with tab_projects:
         )
         
         dates_changed = False
+        validation_errors = []
+        
         for idx, row in edited_config.iterrows():
             task_name = row["Tâche"]
             
@@ -831,6 +845,19 @@ with tab_projects:
                 new_start = row["Début"]
                 new_end = row["Fin"]
                 
+                # VALIDATION DES DÉPENDANCES
+                if new_depends and new_depends in task_dates_dict:
+                    parent_start, parent_end = task_dates_dict[new_depends]
+                    parent_end_date = parent_end.date()
+                    
+                    if new_start <= parent_end_date:
+                        validation_errors.append(
+                            f"❌ **{task_name}** : La date de début ({new_start.strftime('%d/%m/%Y')}) "
+                            f"ne peut pas être avant ou égale à la fin de '{new_depends}' ({parent_end_date.strftime('%d/%m/%Y')}). "
+                            f"Date minimum autorisée : {(parent_end_date + timedelta(days=1)).strftime('%d/%m/%Y')}"
+                        )
+                        continue
+                
                 if override_key not in st.session_state.project_task_overrides:
                     st.session_state.project_task_overrides[override_key] = {}
                 
@@ -843,7 +870,13 @@ with tab_projects:
                     st.session_state.project_task_overrides[override_key]["end_date"] = new_end
                     dates_changed = True
         
-        if dates_changed:
+        if validation_errors:
+            st.error("### ⚠️ Erreurs de validation des dépendances")
+            for error in validation_errors:
+                st.warning(error)
+            st.info("💡 **Conseil** : Modifiez les dates pour respecter l'ordre des dépendances. Une tâche ne peut commencer qu'**après** la fin de sa tâche parente.")
+        
+        if dates_changed and not validation_errors:
             st.rerun()
         
         tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
@@ -1270,4 +1303,4 @@ with tab_capa:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v7.6** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v7.7** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
