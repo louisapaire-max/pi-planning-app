@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v6.3", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v6.4", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -407,7 +407,7 @@ st.divider()
 
 tab_projects, tab_planning, tab_capa, tab_cong = st.tabs([
     "🎯 Gérer les Tâches par Projet",
-    "📋 Planning & Gantt",
+    "📋 Vue Globale Planning",
     "📊 Capacités",
     "🏖️ Congés & Run"
 ])
@@ -702,23 +702,13 @@ with tab_projects:
                 st.error("❌ Veuillez entrer un nom de tâche")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 1: PLANNING & GANTT
+# ONGLET 1: VUE GLOBALE PLANNING
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_planning:
-    st.subheader("📋 Planning détaillé & Gantt")
+    st.subheader("📋 Vue Globale du Planning")
+    st.info("📊 Vue d'ensemble de toutes les tâches de tous les projets")
     
     if not df_plan.empty:
-        df_plan["Start Date"] = pd.to_datetime(df_plan["Début"], errors='coerce')
-        df_plan["End Date"] = pd.to_datetime(df_plan["Fin"], errors='coerce')
-
-    project_list = ["Vue Globale"] + sorted(list(df_plan["Projet"].unique())) if not df_plan.empty else []
-    selected_project = st.selectbox("🎯 Sélectionner un projet", options=project_list, key="gantt_project")
-    
-    st.divider()
-
-    if selected_project == "Vue Globale":
-        st.info("📊 Vue globale de toutes les tâches")
-        
         display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Charge", "Dépendance", "Statut"]
         
         st.dataframe(
@@ -727,19 +717,8 @@ with tab_planning:
             hide_index=True,
             height=600
         )
-
     else:
-        df_filtered = df_plan[df_plan["Projet"] == selected_project].copy()
-        
-        if not df_filtered.empty:
-            df_gantt = df_filtered.dropna(subset=["Start Date", "End Date"]).copy()
-            
-            if not df_gantt.empty:
-                fig = create_gantt_with_dependencies(df_gantt, selected_project)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("⚠️ Aucune tâche avec dates valides.")
+        st.warning("Aucune donnée de planning disponible")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ONGLET 2: CAPACITÉS
@@ -816,4 +795,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v6.3** (Real-time Dependencies Update) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v6.4** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
