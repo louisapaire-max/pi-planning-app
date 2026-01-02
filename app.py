@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v6.5", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v6.6", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -148,6 +148,33 @@ def get_task_manual_dates(project_name, task_name):
         end_date = st.session_state.project_task_overrides[override_key].get("end_date")
         return start_date, end_date
     return None, None
+
+def validate_task_day(task_name, start_date):
+    """Valide si la date de début correspond aux contraintes métier"""
+    if not start_date:
+        return "✅"
+    
+    # Convertir en datetime si c'est un objet date
+    if isinstance(start_date, date) and not isinstance(start_date, datetime):
+        start_dt = datetime.combine(start_date, datetime.min.time())
+    else:
+        start_dt = pd.to_datetime(start_date)
+    
+    weekday = start_dt.weekday()  # 0=Lundi, 1=Mardi, 2=Mercredi, 3=Jeudi, 4=Vendredi
+    
+    # Refinement et Etude d'impact doivent être le mercredi (2)
+    if task_name in ["Refinement", "Etude d'impact"]:
+        if weekday != 2:
+            return "🔴 Mercredi requis"
+        return "✅"
+    
+    # PROD ne peut pas être le vendredi (4)
+    if task_name == "PROD":
+        if weekday == 4:
+            return "🔴 Pas de vendredi"
+        return "✅"
+    
+    return "✅"
 
 def calculate_dates_for_project(project_name):
     """Calcule les dates de début et fin pour chaque tâche d'un projet"""
@@ -450,6 +477,9 @@ with tab_projects:
         # ═════════════════════════════════════════════════════════════════════════
         st.markdown("**📋 Configuration des Tâches**")
         
+        # Info sur les contraintes
+        st.info("📌 **Contraintes métier** : Refinement & Etude d'impact → Mercredi uniquement | PROD → Pas de vendredi")
+        
         # Construire le tableau éditable
         config_data = []
         task_order = []
@@ -470,7 +500,11 @@ with tab_projects:
                 start_date = date(2026, 1, 12)
                 end_date = date(2026, 1, 12)
             
+            # Validation du jour
+            validation = validate_task_day(task["name"], start_date)
+            
             config_data.append({
+                "⚠️": validation,
                 "🗑️": False,
                 "Tâche": task["name"],
                 "Équipe": task["team"],
@@ -494,7 +528,10 @@ with tab_projects:
                     start_date = date(2026, 1, 12)
                     end_date = date(2026, 1, 12)
                 
+                validation = validate_task_day(custom_task_name, start_date)
+                
                 config_data.append({
+                    "⚠️": validation,
                     "🗑️": False,
                     "Tâche": custom_task_name,
                     "Équipe": custom_task.get("team", "N/A"),
@@ -516,6 +553,7 @@ with tab_projects:
             hide_index=True,
             key=f"config_editor_{selected_proj}",
             column_config={
+                "⚠️": st.column_config.TextColumn("⚠️", help="Validation des contraintes métier", width="small", disabled=True),
                 "🗑️": st.column_config.CheckboxColumn("🗑️", help="Cocher pour supprimer", width="small"),
                 "Tâche": st.column_config.TextColumn(disabled=True, width="large"),
                 "Équipe": st.column_config.TextColumn(disabled=True, width="medium"),
@@ -759,4 +797,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v6.5** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v6.6** (Day Validation) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
