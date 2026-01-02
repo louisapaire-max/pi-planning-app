@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v6.4", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v6.5", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -300,8 +300,8 @@ def calculate_planning():
     
     return planning, task_dates
 
-def create_gantt_with_dependencies(df_gantt, project_name):
-    """Crée un Gantt avec flèches de dépendances"""
+def create_gantt_chart(df_gantt, project_name):
+    """Crée un Gantt simple sans flèches"""
     if df_gantt.empty:
         return None
     
@@ -343,42 +343,6 @@ def create_gantt_with_dependencies(df_gantt, project_name):
             annotation_font_color="red",
             annotation_font_size=10
         )
-    
-    # Créer un mapping tâche -> position Y
-    task_list = df_gantt["Tâche"].tolist()
-    task_y_positions = {task: len(task_list) - 1 - idx for idx, task in enumerate(task_list)}
-    
-    # Ajouter les flèches de dépendances
-    for idx, row in df_gantt.iterrows():
-        if row["Dépendance"] and row["Dépendance"] in task_y_positions:
-            parent_task = row["Dépendance"]
-            parent_y = task_y_positions[parent_task]
-            
-            current_task = row["Tâche"]
-            current_y = task_y_positions[current_task]
-            
-            parent_row = df_gantt[df_gantt["Tâche"] == parent_task]
-            if not parent_row.empty:
-                parent_end = parent_row.iloc[0]["End Date"]
-                current_start = row["Start Date"]
-                
-                fig.add_annotation(
-                    x=parent_end,
-                    y=parent_y,
-                    ax=current_start,
-                    ay=current_y,
-                    xref="x",
-                    yref="y",
-                    axref="x",
-                    ayref="y",
-                    showarrow=True,
-                    arrowhead=2,
-                    arrowsize=1,
-                    arrowwidth=2,
-                    arrowcolor="rgba(100, 100, 100, 0.6)",
-                    standoff=5,
-                    startstandoff=5
-                )
 
     first_iteration_start = ITERATIONS[0]["start"]
     last_iteration_end = ITERATIONS[-1]["end"]
@@ -473,7 +437,7 @@ with tab_projects:
         df_project_gantt = pd.DataFrame(project_gantt_data)
         
         if not df_project_gantt.empty:
-            fig_gantt = create_gantt_with_dependencies(df_project_gantt, selected_proj)
+            fig_gantt = create_gantt_chart(df_project_gantt, selected_proj)
             if fig_gantt:
                 st.plotly_chart(fig_gantt, use_container_width=True)
         else:
@@ -795,4 +759,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v6.4** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v6.5** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
