@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v5.6", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v5.8", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -84,7 +84,13 @@ if "tasks_config" not in st.session_state:
 if "projects_tasks" not in st.session_state:
     st.session_state.projects_tasks = {}
     for proj in PROJECTS:
-        st.session_state.projects_tasks[proj["name"]] = [t["name"] for t in TASKS_DEFAULT]
+        st.session_state.projects_tasks[proj["name"]] = {
+            "default": [t["name"] for t in TASKS_DEFAULT],
+            "custom": []
+        }
+
+if "custom_tasks" not in st.session_state:
+    st.session_state.custom_tasks = {}
 
 if "capacity" not in st.session_state:
     st.session_state.capacity = {}
@@ -118,9 +124,15 @@ def get_net_capacity(team: str, iteration: dict) -> float:
 def get_tasks_list():
     return list(st.session_state.tasks_config.values())
 
+def get_all_tasks_for_project(project_name):
+    """Récupère TOUS les noms de tâches (default + custom) pour un projet"""
+    default_tasks = st.session_state.projects_tasks.get(project_name, {}).get("default", [])
+    custom_tasks = st.session_state.projects_tasks.get(project_name, {}).get("custom", [])
+    return default_tasks + custom_tasks
+
 def calculate_planning():
     """
-    Calcul du planning respectant VRAIMENT le sizing (en jours) et les dépendances.
+    Calcul du planning respectant le sizing (en jours) et les dépendances.
     """
     TASKS = get_tasks_list()
     planning = []
@@ -130,10 +142,13 @@ def calculate_planning():
     current_date = first_iter_start
     
     for project in sorted(PROJECTS, key=lambda x: x["priority"]):
-        project_tasks = st.session_state.projects_tasks.get(project["name"], [])
+        # Récupérer les tâches default ET custom du projet
+        default_tasks = st.session_state.projects_tasks.get(project["name"], {}).get("default", [])
+        custom_tasks = st.session_state.projects_tasks.get(project["name"], {}).get("custom", [])
+        project_task_names = default_tasks + custom_tasks
         
         for task in sorted(TASKS, key=lambda t: t["order"]):
-            if task["name"] not in project_tasks:
+            if task["name"] not in project_task_names:
                 continue
             
             start_date = current_date
@@ -173,39 +188,36 @@ def calculate_planning():
                 "Dépendance": task["depends_on"],
                 "Statut": "✅ Planifié"
             })
+        
+        # Ajouter les tâches CUSTOM du projet
+        for custom_task_name in custom_tasks:
+            if custom_task_name not in st.session_state.tasks_config:
+                if custom_task_name in st.session_state.custom_tasks:
+                    custom_task = st.session_state.custom_tasks[custom_task_name]
+                    
+                    start_date = pd.to_datetime(custom_task.get("start_date", ITERATIONS[0]["start"]))
+                    end_date = start_date + timedelta(days=custom_task.get("charge", 1))
+                    
+                    task_key = f"{project['name']}_{custom_task_name}"
+                    task_dates[task_key] = (start_date, end_date)
+                    
+                    planning.append({
+                        "Priorité": project["priority"],
+                        "Projet": project["name"],
+                        "Tâche": custom_task_name,
+                        "Équipe": custom_task.get("team", "N/A"),
+                        "Début": start_date.strftime("%Y-%m-%d"),
+                        "Fin": end_date.strftime("%Y-%m-%d"),
+                        "Charge": custom_task.get("charge", 1),
+                        "Dépendance": custom_task.get("depends_on", None),
+                        "Statut": "✅ Planifié"
+                    })
     
     return planning, task_dates
 
 # Calcul planning
 planning, task_dates = calculate_planning()
 df_plan = pd.DataFrame(planning)
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# KPIs
-# ═══════════════════════════════════════════════════════════════════════════════
-
-st.markdown("### 📊 Vue d'Ensemble - KPIs")
-col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-
-with col_kpi1:
-    total_taches = len(df_plan)
-    st.metric("📋 Total Tâches", total_taches)
-
-with col_kpi2:
-    planifiees = len(df_plan[df_plan["Statut"] == "✅ Planifié"])
-    st.metric("✅ Planifiées", planifiees, f"{planifiees/total_taches*100:.0f}%" if total_taches > 0 else "0%")
-
-with col_kpi3:
-    bloquees = len(df_plan[df_plan["Statut"] == "❌ Bloqué"])
-    st.metric("❌ Bloquées", bloquees, f"{bloquees/total_taches*100:.0f}%" if total_taches > 0 else "0%")
-
-with col_kpi4:
-    if not df_plan.empty and not df_plan[df_plan["Début"].notna()].empty:
-        duree_total = (pd.to_datetime(df_plan[df_plan["Début"].notna()]["Fin"].max()) - 
-                       pd.to_datetime(df_plan[df_plan["Début"].notna()]["Début"].min())).days
-        st.metric("📅 Durée Totale", f"{duree_total} jours")
-    else:
-        st.metric("📅 Durée Totale", "N/A")
 
 st.divider()
 
@@ -227,7 +239,7 @@ tab_config, tab_projects, tab_planning, tab_capa, tab_cong = st.tabs([
 with tab_config:
     st.subheader("⚙️ Configuration des Tâches - Sizing & Dépendances")
     st.markdown("""
-    Modifiez ici :
+    Modifiez ici les tâches template :
     - **Sizing (Charge)** : Nombre de jours requis pour la tâche
     - **Dépendances** : Tâche(s) requise(s) avant de commencer celle-ci
     
@@ -309,34 +321,112 @@ with tab_projects:
     selected_proj = st.selectbox("Sélectionner un projet", options=[p["name"] for p in PROJECTS])
     
     if selected_proj:
-        current_tasks = st.session_state.projects_tasks.get(selected_proj, [])
+        current_default_tasks = st.session_state.projects_tasks.get(selected_proj, {}).get("default", [])
+        current_custom_tasks = st.session_state.projects_tasks.get(selected_proj, {}).get("custom", [])
         
         st.markdown(f"#### Tâches du projet: **{selected_proj}**")
         
+        # ═════════════════════════════════════════════════════════════════════════
+        # SECTION 1: TÂCHES DEFAULT
+        # ═════════════════════════════════════════════════════════════════════════
+        st.markdown("**🔧 Tâches Template (par défaut)**")
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**Tâches actuelles ✅**")
-            for task_name in current_tasks:
+            st.markdown("Tâches assignées ✅")
+            for task_name in current_default_tasks:
                 col_task, col_remove = st.columns([4, 1])
                 with col_task:
                     st.text(task_name)
                 with col_remove:
-                    if st.button("❌", key=f"remove_{task_name}", help="Supprimer"):
-                        st.session_state.projects_tasks[selected_proj].remove(task_name)
+                    if st.button("❌", key=f"remove_default_{task_name}"):
+                        st.session_state.projects_tasks[selected_proj]["default"].remove(task_name)
                         st.rerun()
         
         with col2:
-            st.markdown("**Ajouter une tâche ➕**")
-            available_tasks = [t for t in all_task_names if t not in current_tasks]
+            st.markdown("Ajouter une tâche template ➕")
+            available_tasks = [t for t in all_task_names if t not in current_default_tasks]
             
             if available_tasks:
-                new_task = st.selectbox("Sélectionner une tâche à ajouter", options=available_tasks)
-                if st.button("➕ Ajouter", key="add_task"):
-                    st.session_state.projects_tasks[selected_proj].append(new_task)
+                new_task = st.selectbox("Sélectionner une tâche template", options=available_tasks, key="add_default_task")
+                if st.button("➕ Ajouter (Template)", key="btn_add_default"):
+                    st.session_state.projects_tasks[selected_proj]["default"].append(new_task)
                     st.rerun()
             else:
-                st.info("Toutes les tâches sont déjà assignées à ce projet.")
+                st.info("Toutes les tâches template sont déjà assignées.")
+        
+        st.divider()
+        
+        # ═════════════════════════════════════════════════════════════════════════
+        # SECTION 2: CRÉER UNE TÂCHE PERSONNALISÉE
+        # ═════════════════════════════════════════════════════════════════════════
+        st.markdown("**➕ Créer une Tâche Personnalisée**")
+        
+        col_name, col_team, col_charge = st.columns(3)
+        
+        with col_name:
+            new_task_name = st.text_input("📝 Nom de la tâche", placeholder="Ex: Migration BDD")
+        
+        with col_team:
+            new_task_team = st.selectbox("👥 Équipe responsable", options=TEAMS)
+        
+        with col_charge:
+            new_task_charge = st.number_input("📅 Charge (jours)", min_value=0.5, max_value=20.0, step=0.5, value=1.0)
+        
+        col_start, col_dep = st.columns(2)
+        
+        with col_start:
+            new_task_start = st.date_input("📅 Date de début", value=date(2026, 1, 12))
+        
+        with col_dep:
+            all_project_tasks = get_all_tasks_for_project(selected_proj)
+            dep_options = ["(Aucune)"] + all_project_tasks
+            new_task_dep = st.selectbox("🔗 Dépendance", options=dep_options)
+        
+        if st.button("➕ Créer la tâche personnalisée", key="btn_create_custom"):
+            if new_task_name:
+                task_id = f"{selected_proj}_{new_task_name}"
+                st.session_state.custom_tasks[new_task_name] = {
+                    "team": new_task_team,
+                    "charge": new_task_charge,
+                    "start_date": new_task_start.strftime("%Y-%m-%d"),
+                    "depends_on": None if new_task_dep == "(Aucune)" else new_task_dep
+                }
+                
+                if "custom" not in st.session_state.projects_tasks[selected_proj]:
+                    st.session_state.projects_tasks[selected_proj]["custom"] = []
+                
+                st.session_state.projects_tasks[selected_proj]["custom"].append(new_task_name)
+                st.success(f"✅ Tâche personnalisée '{new_task_name}' créée!")
+                st.rerun()
+            else:
+                st.error("❌ Veuillez entrer un nom de tâche")
+        
+        st.divider()
+        
+        # ═════════════════════════════════════════════════════════════════════════
+        # SECTION 3: TÂCHES PERSONNALISÉES
+        # ═════════════════════════════════════════════════════════════════════════
+        if current_custom_tasks:
+            st.markdown("**📌 Tâches Personnalisées**")
+            
+            for custom_task_name in current_custom_tasks:
+                col_info, col_remove = st.columns([4, 1])
+                
+                with col_info:
+                    task_info = st.session_state.custom_tasks.get(custom_task_name, {})
+                    st.markdown(f"""
+                    **{custom_task_name}**
+                    - 👥 Équipe: {task_info.get('team', 'N/A')}
+                    - 📅 Charge: {task_info.get('charge', 'N/A')} jours
+                    - 📆 Début: {task_info.get('start_date', 'N/A')}
+                    - 🔗 Dépend de: {task_info.get('depends_on', 'Aucune')}
+                    """)
+                
+                with col_remove:
+                    if st.button("❌", key=f"remove_custom_{custom_task_name}", help="Supprimer"):
+                        st.session_state.projects_tasks[selected_proj]["custom"].remove(custom_task_name)
+                        st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ONGLET 2: PLANNING & GANTT
@@ -503,4 +593,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v5.6** (Sizing & Dependencies Fixed) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v5.8** (Final) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
