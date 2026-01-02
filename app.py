@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v6.0", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v6.1", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -130,15 +130,15 @@ def get_task_charge_for_project(project_name, task_name):
     """Récupère la charge d'une tâche pour un projet (override ou default)"""
     override_key = f"{project_name}_{task_name}"
     if override_key in st.session_state.project_task_overrides:
-        return st.session_state.project_task_overrides[override_key].get("charge", st.session_state.tasks_config[task_name]["charge"])
-    return st.session_state.tasks_config[task_name]["charge"]
+        return st.session_state.project_task_overrides[override_key].get("charge", st.session_state.tasks_config.get(task_name, {}).get("charge", 1))
+    return st.session_state.tasks_config.get(task_name, {}).get("charge", 1)
 
 def get_task_depends_for_project(project_name, task_name):
     """Récupère la dépendance d'une tâche pour un projet (override ou default)"""
     override_key = f"{project_name}_{task_name}"
     if override_key in st.session_state.project_task_overrides:
-        return st.session_state.project_task_overrides[override_key].get("depends_on", st.session_state.tasks_config[task_name]["depends_on"])
-    return st.session_state.tasks_config[task_name]["depends_on"]
+        return st.session_state.project_task_overrides[override_key].get("depends_on", st.session_state.tasks_config.get(task_name, {}).get("depends_on"))
+    return st.session_state.tasks_config.get(task_name, {}).get("depends_on")
 
 def calculate_dates_for_project(project_name):
     """Calcule les dates de début et fin pour chaque tâche d'un projet"""
@@ -294,7 +294,7 @@ with tab_projects:
         task_dates_dict = calculate_dates_for_project(selected_proj)
         
         # ═════════════════════════════════════════════════════════════════════════
-        # TABLEAU ÉDITABLE - AVEC DATES, DÉPENDANCES, SUPPRESSION
+        # TABLEAU ÉDITABLE - AVEC DATES ÉDITABLES, DÉPENDANCES, SUPPRESSION
         # ═════════════════════════════════════════════════════════════════════════
         st.markdown("**📋 Configuration des Tâches**")
         
@@ -312,20 +312,20 @@ with tab_projects:
             # Calculer les dates
             if task["name"] in task_dates_dict:
                 start_dt, end_dt = task_dates_dict[task["name"]]
-                start_str = start_dt.strftime("%Y-%m-%d")
-                end_str = end_dt.strftime("%Y-%m-%d")
+                start_date = start_dt.date()
+                end_date = end_dt.date()
             else:
-                start_str = "N/A"
-                end_str = "N/A"
+                start_date = date(2026, 1, 12)
+                end_date = date(2026, 1, 12)
             
             config_data.append({
+                "🗑️": False,
                 "Tâche": task["name"],
                 "Équipe": task["team"],
                 "Charge (j)": charge,
-                "Début": start_str,
-                "Fin": end_str,
-                "Dépend de": depends if depends else "(Aucune)",
-                "Action": "❌"
+                "Début": start_date,
+                "Fin": end_date,
+                "Dépend de": depends if depends else "(Aucune)"
             })
             task_order.append(task["name"])
         
@@ -336,20 +336,20 @@ with tab_projects:
                 
                 if custom_task_name in task_dates_dict:
                     start_dt, end_dt = task_dates_dict[custom_task_name]
-                    start_str = start_dt.strftime("%Y-%m-%d")
-                    end_str = end_dt.strftime("%Y-%m-%d")
+                    start_date = start_dt.date()
+                    end_date = end_dt.date()
                 else:
-                    start_str = "N/A"
-                    end_str = "N/A"
+                    start_date = date(2026, 1, 12)
+                    end_date = date(2026, 1, 12)
                 
                 config_data.append({
+                    "🗑️": False,
                     "Tâche": custom_task_name,
                     "Équipe": custom_task.get("team", "N/A"),
                     "Charge (j)": custom_task.get("charge", 1),
-                    "Début": start_str,
-                    "Fin": end_str,
-                    "Dépend de": custom_task.get("depends_on", "(Aucune)") if custom_task.get("depends_on") else "(Aucune)",
-                    "Action": "❌"
+                    "Début": start_date,
+                    "Fin": end_date,
+                    "Dépend de": custom_task.get("depends_on", "(Aucune)") if custom_task.get("depends_on") else "(Aucune)"
                 })
                 task_order.append(custom_task_name)
         
@@ -364,17 +364,17 @@ with tab_projects:
             hide_index=True,
             key=f"config_editor_{selected_proj}",
             column_config={
+                "🗑️": st.column_config.CheckboxColumn("🗑️", help="Cocher pour supprimer", width="small"),
                 "Tâche": st.column_config.TextColumn(disabled=True, width="large"),
                 "Équipe": st.column_config.TextColumn(disabled=True, width="medium"),
                 "Charge (j)": st.column_config.NumberColumn("Charge (j)", min_value=0.5, max_value=20, step=0.5, width="small"),
-                "Début": st.column_config.TextColumn(disabled=True, width="small"),
-                "Fin": st.column_config.TextColumn(disabled=True, width="small"),
+                "Début": st.column_config.DateColumn("Début", format="DD/MM/YYYY", width="small"),
+                "Fin": st.column_config.DateColumn("Fin", format="DD/MM/YYYY", width="small"),
                 "Dépend de": st.column_config.SelectboxColumn(
                     "Dépend de",
                     options=["(Aucune)"] + all_project_tasks_for_selector,
                     width="medium"
-                ),
-                "Action": st.column_config.TextColumn(disabled=True, width="small")
+                )
             }
         )
         
@@ -409,36 +409,24 @@ with tab_projects:
                     st.session_state.project_task_overrides[override_key]["charge"] = new_charge
                     st.session_state.project_task_overrides[override_key]["depends_on"] = new_depends
         
-        st.divider()
+        # Bouton pour supprimer les tâches cochées
+        tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
         
-        # ═════════════════════════════════════════════════════════════════════════
-        # BOUTONS SUPPRIMER (basés sur les clics "❌")
-        # ═════════════════════════════════════════════════════════════════════════
-        st.markdown("**🗑️ Supprimer une tâche**")
-        
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            task_to_remove = st.selectbox(
-                "Sélectionner une tâche à supprimer",
-                options=all_project_tasks,
-                key=f"task_to_remove_{selected_proj}"
-            )
-        
-        with col2:
-            if st.button("🗑️ Supprimer", key=f"btn_remove_{selected_proj}"):
-                # Vérifier si c'est une tâche custom ou default
-                custom_tasks = st.session_state.projects_tasks[selected_proj].get("custom", [])
-                default_tasks = st.session_state.projects_tasks[selected_proj].get("default", [])
+        if tasks_to_delete:
+            st.warning(f"⚠️ {len(tasks_to_delete)} tâche(s) sélectionnée(s) pour suppression : {', '.join(tasks_to_delete)}")
+            
+            if st.button("🗑️ Supprimer les tâches cochées", type="primary", key=f"btn_delete_checked_{selected_proj}"):
+                for task_name in tasks_to_delete:
+                    custom_tasks = st.session_state.projects_tasks[selected_proj].get("custom", [])
+                    default_tasks = st.session_state.projects_tasks[selected_proj].get("default", [])
+                    
+                    if task_name in custom_tasks:
+                        st.session_state.projects_tasks[selected_proj]["custom"].remove(task_name)
+                    elif task_name in default_tasks:
+                        st.session_state.projects_tasks[selected_proj]["default"].remove(task_name)
                 
-                if task_to_remove in custom_tasks:
-                    st.session_state.projects_tasks[selected_proj]["custom"].remove(task_to_remove)
-                    st.success(f"✅ Tâche '{task_to_remove}' supprimée !")
-                    st.rerun()
-                elif task_to_remove in default_tasks:
-                    st.session_state.projects_tasks[selected_proj]["default"].remove(task_to_remove)
-                    st.success(f"✅ Tâche '{task_to_remove}' supprimée du projet !")
-                    st.rerun()
+                st.success(f"✅ {len(tasks_to_delete)} tâche(s) supprimée(s) !")
+                st.rerun()
         
         st.divider()
         
@@ -668,4 +656,4 @@ with tab_cong:
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v6.0** (Project-Centric Tasks Management) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v6.1** (Editable Dates + Checkbox Delete) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
