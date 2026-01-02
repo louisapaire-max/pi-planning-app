@@ -772,50 +772,6 @@ with tab_projects:
         
         st.divider()
         
-        project_gantt_data = []
-        for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
-            if task["name"] not in all_project_tasks:
-                continue
-            
-            depends = get_task_depends_for_project(selected_proj, task["name"])
-            
-            if task["name"] in task_dates_dict:
-                start_dt, end_dt = task_dates_dict[task["name"]]
-                
-                project_gantt_data.append({
-                    "Tâche": task["name"],
-                    "Équipe": task["team"],
-                    "Dépendance": depends if depends else "Aucune",
-                    "Start Date": start_dt,
-                    "End Date": end_dt
-                })
-        
-        for custom_task_name in st.session_state.projects_tasks.get(selected_proj, {}).get("custom", []):
-            if custom_task_name in st.session_state.custom_tasks:
-                custom_task = st.session_state.custom_tasks[custom_task_name]
-                
-                if custom_task_name in task_dates_dict:
-                    start_dt, end_dt = task_dates_dict[custom_task_name]
-                    
-                    project_gantt_data.append({
-                        "Tâche": custom_task_name,
-                        "Équipe": custom_task.get("team", "N/A"),
-                        "Dépendance": custom_task.get("depends_on", "Aucune") if custom_task.get("depends_on") else "Aucune",
-                        "Start Date": start_dt,
-                        "End Date": end_dt
-                    })
-        
-        df_project_gantt = pd.DataFrame(project_gantt_data)
-        
-        if not df_project_gantt.empty:
-            fig_gantt = create_gantt_chart(df_project_gantt, title=f"📅 Gantt: {selected_proj}")
-            if fig_gantt:
-                st.plotly_chart(fig_gantt, use_container_width=True)
-        else:
-            st.info("Aucune tâche à afficher dans le Gantt")
-        
-        st.divider()
-        
         st.markdown("**📋 Configuration des Tâches**")
         st.info("📌 **Contraintes** : Refinement & Etude d'impact → Mercredi | PROD → **Pas de vendredi** | **Pas de weekend autorisé**")
         
@@ -942,12 +898,55 @@ with tab_projects:
         
         # Afficher un message si des modifications ont été faites
         if dates_changed or depends_changed:
-            col_info1, col_info2 = st.columns([3, 1])
-            with col_info1:
-                st.success("✅ Modifications enregistrées automatiquement")
-            with col_info2:
-                if st.button("🔄 Recalculer le planning", key=f"recalc_{selected_proj}", use_container_width=True):
-                    st.rerun()
+            st.info("💾 Modifications enregistrées - Le Gantt ci-dessous est mis à jour automatiquement")
+        
+        # RECALCULER LES DATES APRÈS LES MODIFICATIONS
+        task_dates_dict_updated = calculate_dates_for_project(selected_proj)
+        
+        st.divider()
+        
+        # GANTT AVEC LES NOUVELLES DONNÉES
+        project_gantt_data = []
+        for task in sorted(get_tasks_list(), key=lambda t: t["order"]):
+            if task["name"] not in all_project_tasks:
+                continue
+            
+            depends = get_task_depends_for_project(selected_proj, task["name"])
+            
+            if task["name"] in task_dates_dict_updated:
+                start_dt, end_dt = task_dates_dict_updated[task["name"]]
+                
+                project_gantt_data.append({
+                    "Tâche": task["name"],
+                    "Équipe": task["team"],
+                    "Dépendance": depends if depends else "Aucune",
+                    "Start Date": start_dt,
+                    "End Date": end_dt
+                })
+        
+        for custom_task_name in st.session_state.projects_tasks.get(selected_proj, {}).get("custom", []):
+            if custom_task_name in st.session_state.custom_tasks:
+                custom_task = st.session_state.custom_tasks[custom_task_name]
+                
+                if custom_task_name in task_dates_dict_updated:
+                    start_dt, end_dt = task_dates_dict_updated[custom_task_name]
+                    
+                    project_gantt_data.append({
+                        "Tâche": custom_task_name,
+                        "Équipe": custom_task.get("team", "N/A"),
+                        "Dépendance": custom_task.get("depends_on", "Aucune") if custom_task.get("depends_on") else "Aucune",
+                        "Start Date": start_dt,
+                        "End Date": end_dt
+                    })
+        
+        df_project_gantt = pd.DataFrame(project_gantt_data)
+        
+        if not df_project_gantt.empty:
+            fig_gantt = create_gantt_chart(df_project_gantt, title=f"📅 Gantt: {selected_proj}")
+            if fig_gantt:
+                st.plotly_chart(fig_gantt, use_container_width=True)
+        else:
+            st.info("Aucune tâche à afficher dans le Gantt")
         
         tasks_to_delete = edited_config[edited_config["🗑️"] == True]["Tâche"].tolist()
         
