@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v6.8", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v7.0", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
@@ -329,8 +329,103 @@ def calculate_planning():
     
     return planning, task_dates
 
-def create_gantt_chart(df_gantt, title="Gantt Chart"):
-    """Crée un Gantt simple sans flèches"""
+def create_gantt_chart_project(df_gantt, title="Gantt Chart"):
+    """Crée un Gantt pour un projet individuel avec tâches commencées en vert"""
+    if df_gantt.empty:
+        return None
+    
+    # Ajouter une colonne de statut (commencé ou non)
+    today = pd.to_datetime(datetime.now().date())
+    df_gantt["Statut_Tâche"] = df_gantt["Start Date"].apply(
+        lambda x: "✅ Commencée" if pd.to_datetime(x) < today else "⏳ À venir"
+    )
+    
+    # Palette de couleurs : vert pour commencé, couleurs équipe pour à venir
+    fig = go.Figure()
+    
+    for idx, row in df_gantt.iterrows():
+        if row["Statut_Tâche"] == "✅ Commencée":
+            color = "#28A745"  # Vert
+        else:
+            color = TEAM_COLORS.get(row["Équipe"], "#999999")
+        
+        fig.add_trace(go.Bar(
+            x=[row["End Date"] - row["Start Date"]],
+            y=[row["Tâche"]],
+            base=row["Start Date"],
+            orientation='h',
+            marker=dict(color=color),
+            name=row["Équipe"],
+            showlegend=False,
+            hovertemplate=f"<b>{row['Tâche']}</b><br>" +
+                         f"Équipe: {row['Équipe']}<br>" +
+                         f"Charge: {row['Charge']}j<br>" +
+                         f"Dépendance: {row['Dépendance']}<br>" +
+                         f"Statut: {row['Statut_Tâche']}<extra></extra>"
+        ))
+    
+    # Ajouter les itérations
+    colors_bg = ["rgba(230, 230, 230, 0.3)", "rgba(200, 230, 255, 0.3)", "rgba(220, 255, 220, 0.3)", "rgba(255, 220, 220, 0.3)", "rgba(220, 255, 255, 0.3)"]
+    for i, it in enumerate(ITERATIONS):
+        fig.add_vrect(
+            x0=it["start"], x1=it["end"],
+            fillcolor=colors_bg[i % len(colors_bg)], 
+            layer="below", line_width=0,
+            annotation_text=f"<b>{it['name']}</b>", 
+            annotation_position="top left",
+            annotation_font_size=13
+        )
+        fig.add_vline(x=it["end"], line_width=2, line_dash="dot", line_color="gray")
+    
+    # Ajouter les jours fériés
+    for hol_date in HOLIDAYS_2026:
+        start_hol = pd.to_datetime(hol_date)
+        end_hol = start_hol + timedelta(days=1)
+        fig.add_vrect(
+            x0=start_hol, x1=end_hol,
+            fillcolor="rgba(255, 0, 0, 0.2)",
+            line_width=0,
+            annotation_text="Férié",
+            annotation_position="bottom right",
+            annotation_font_color="red",
+            annotation_font_size=10
+        )
+    
+    # Indicateur date actuelle
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    fig.add_vline(
+        x=today_str,
+        line_width=3,
+        line_dash="solid",
+        line_color="rgb(255, 0, 0)",
+        annotation_text="📍 AUJOURD'HUI",
+        annotation_position="top",
+        annotation_font_size=12,
+        annotation_font_color="red"
+    )
+
+    first_iteration_start = ITERATIONS[0]["start"]
+    last_iteration_end = ITERATIONS[-1]["end"]
+    
+    fig.update_xaxes(
+        range=[first_iteration_start, last_iteration_end],
+        tickformat="%a %d/%m",
+        dtick=86400000.0,
+        side="top",
+        tickfont=dict(size=11),
+        rangebreaks=[dict(bounds=["sat", "mon"])]
+    )
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(
+        title=title,
+        height=max(400, len(df_gantt) * 45),
+        showlegend=False
+    )
+    
+    return fig
+
+def create_gantt_chart_global(df_gantt, title="Gantt Chart"):
+    """Crée un Gantt global avec toutes les tâches"""
     if df_gantt.empty:
         return None
     
@@ -372,6 +467,19 @@ def create_gantt_chart(df_gantt, title="Gantt Chart"):
             annotation_font_color="red",
             annotation_font_size=10
         )
+    
+    # Indicateur date actuelle
+    today = datetime.now().strftime("%Y-%m-%d")
+    fig.add_vline(
+        x=today,
+        line_width=3,
+        line_dash="solid",
+        line_color="rgb(255, 0, 0)",
+        annotation_text="📍 AUJOURD'HUI",
+        annotation_position="top",
+        annotation_font_size=12,
+        annotation_font_color="red"
+    )
 
     first_iteration_start = ITERATIONS[0]["start"]
     last_iteration_end = ITERATIONS[-1]["end"]
@@ -421,7 +529,7 @@ with tab_projects:
         task_dates_dict = calculate_dates_for_project(selected_proj)
         
         # ═════════════════════════════════════════════════════════════════════════
-        # GANTT EN HAUT
+        # GANTT EN HAUT - VERSION SIMPLIFIÉE
         # ═════════════════════════════════════════════════════════════════════════
         
         # Préparer les données pour le Gantt du projet
@@ -438,8 +546,6 @@ with tab_projects:
                 
                 project_gantt_data.append({
                     "Tâche": task["name"],
-                    "Tâche_Projet": f"{task['name']} [{selected_proj[:30]}]",
-                    "Projet": selected_proj,
                     "Équipe": task["team"],
                     "Charge": charge,
                     "Dépendance": depends,
@@ -457,8 +563,6 @@ with tab_projects:
                     
                     project_gantt_data.append({
                         "Tâche": custom_task_name,
-                        "Tâche_Projet": f"{custom_task_name} [{selected_proj[:30]}]",
-                        "Projet": selected_proj,
                         "Équipe": custom_task.get("team", "N/A"),
                         "Charge": custom_task.get("charge", 1),
                         "Dépendance": custom_task.get("depends_on", None),
@@ -469,7 +573,7 @@ with tab_projects:
         df_project_gantt = pd.DataFrame(project_gantt_data)
         
         if not df_project_gantt.empty:
-            fig_gantt = create_gantt_chart(df_project_gantt, title=f"📅 Gantt: {selected_proj}")
+            fig_gantt = create_gantt_chart_project(df_project_gantt, title=f"📅 Gantt: {selected_proj}")
             if fig_gantt:
                 st.plotly_chart(fig_gantt, use_container_width=True)
         else:
@@ -674,6 +778,146 @@ with tab_projects:
         # ═════════════════════════════════════════════════════════════════════════
         # CRÉER UNE TÂCHE PERSONNALISÉE
         # ═════════════════════════════════════════════════════════════════════════
-        st.mark
+        st.markdown("**➕ Créer une Tâche Personnalisée**")
+        
+        col_name, col_team, col_charge = st.columns(3)
+        
+        with col_name:
+            new_task_name = st.text_input("📝 Nom de la tâche", placeholder="Ex: Migration BDD", key=f"new_task_name_{selected_proj}")
+        
+        with col_team:
+            new_task_team = st.selectbox("👥 Équipe responsable", options=TEAMS, key=f"new_task_team_{selected_proj}")
+        
+        with col_charge:
+            new_task_charge = st.number_input("📅 Charge (jours)", min_value=0.5, max_value=20.0, step=0.5, value=1.0, key=f"new_task_charge_{selected_proj}")
+        
+        col_dep = st.columns(1)[0]
+        
+        with col_dep:
+            dep_options = ["(Aucune)"] + get_all_tasks_for_project(selected_proj)
+            new_task_dep = st.selectbox("🔗 Dépendance", options=dep_options, key=f"new_task_dep_{selected_proj}")
+        
+        if st.button("➕ Créer la tâche personnalisée", key=f"btn_create_custom_{selected_proj}"):
+            if new_task_name:
+                st.session_state.custom_tasks[new_task_name] = {
+                    "team": new_task_team,
+                    "charge": new_task_charge,
+                    "start_date": ITERATIONS[0]["start"],
+                    "depends_on": None if new_task_dep == "(Aucune)" else new_task_dep
+                }
+                
+                st.session_state.projects_tasks[selected_proj]["custom"].append(new_task_name)
+                st.success(f"✅ Tâche personnalisée '{new_task_name}' créée !")
+                st.rerun()
+            else:
+                st.error("❌ Veuillez entrer un nom de tâche")
 
-st.markdown(f"🛠 **PI Planning Tool v6.8** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 1: VUE GLOBALE PLANNING
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_planning:
+    st.subheader("📋 Vue Globale du Planning")
+    st.info("📊 Vue d'ensemble de toutes les tâches de tous les projets")
+    
+    # GANTT GLOBAL
+    if not df_plan.empty:
+        df_plan["Start Date"] = pd.to_datetime(df_plan["Début"], errors='coerce')
+        df_plan["End Date"] = pd.to_datetime(df_plan["Fin"], errors='coerce')
+        
+        df_gantt_global = df_plan.dropna(subset=["Start Date", "End Date"]).copy()
+        df_gantt_global["Tâche_Projet"] = df_gantt_global["Tâche"] + " [" + df_gantt_global["Projet"].str[:30] + "]"
+        
+        if not df_gantt_global.empty:
+            fig_global = create_gantt_chart_global(df_gantt_global, title="📅 Gantt Global - Tous les Projets")
+            if fig_global:
+                st.plotly_chart(fig_global, use_container_width=True)
+        
+        st.divider()
+        
+        # TABLEAU
+        display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Charge", "Dépendance", "Statut"]
+        
+        st.dataframe(
+            df_plan[display_cols].sort_values("Priorité"),
+            use_container_width=True,
+            hide_index=True,
+            height=600
+        )
+    else:
+        st.warning("Aucune donnée de planning disponible")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 2: CAPACITÉS & RESSOURCES
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_capa:
+    st.subheader("📊 Capacités & Ressources")
+    
+    st.markdown("### 💼 Capacités Brutes (Jours)")
+    
+    capacity_data = {}
+    for team in TEAMS:
+        capacity_data[team] = []
+        for it in ITERATIONS:
+            key = (team, it["name"])
+            capacity_data[team].append(st.session_state.capacity[key])
+    
+    df_cap = pd.DataFrame(capacity_data, index=[it["name"] for it in ITERATIONS]).T
+    
+    edited_cap = st.data_editor(
+        df_cap,
+        use_container_width=True,
+        key="capacity_editor",
+        column_config={
+            it["name"]: st.column_config.NumberColumn(
+                it["name"], min_value=0, max_value=100, step=0.5, format="%.1f j"
+            ) for it in ITERATIONS
+        }
+    )
+    
+    for idx, team in enumerate(TEAMS):
+        for jdx, it in enumerate(ITERATIONS):
+            key = (team, it["name"])
+            st.session_state.capacity[key] = edited_cap.iloc[idx, jdx]
+    
+    st.divider()
+    st.metric("📦 Capacité totale", f"{edited_cap.sum().sum():.1f} jours")
+    
+    st.divider()
+    
+    # CONGÉS ET RUN
+    col_leave, col_run = st.columns(2)
+    
+    with col_leave:
+        st.markdown("### 🏖️ Congés (jours)")
+        leave_data = {}
+        for team in TEAMS:
+            leave_data[team] = []
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                leave_data[team].append(st.session_state.leaves[key])
+        
+        df_leave = pd.DataFrame(leave_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_leave = st.data_editor(df_leave, use_container_width=True, key="leaves_editor")
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                st.session_state.leaves[(team, it["name"])] = edited_leave.iloc[idx, jdx]
+    
+    with col_run:
+        st.markdown("### 🛠️ Run & Support (jours)")
+        run_data = {}
+        for team in TEAMS:
+            run_data[team] = []
+            for it in ITERATIONS:
+                key = (team, it["name"])
+                run_data[team].append(st.session_state.run_days[key])
+        
+        df_run = pd.DataFrame(run_data, index=[it["name"] for it in ITERATIONS]).T
+        edited_run = st.data_editor(df_run, use_container_width=True, key="run_days_editor")
+        
+        for idx, team in enumerate(TEAMS):
+            for jdx, it in enumerate(ITERATIONS):
+                st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
+
+st.divider()
+st.markdown(f"🛠 **PI Planning Tool v7.0** | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
