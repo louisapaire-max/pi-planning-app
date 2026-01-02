@@ -364,7 +364,12 @@ with tab_planning:
                         annotation_font_size=10
                     )
 
+                # ✅ LIMITE LE GANTT AUX ITÉRATIONS SEULEMENT
+                first_iteration_start = ITERATIONS[0]["start"]
+                last_iteration_end = ITERATIONS[-1]["end"]
+                
                 fig.update_xaxes(
+                    range=[first_iteration_start, last_iteration_end],
                     tickformat="%a %d/%m",
                     dtick=86400000.0,
                     side="top",
@@ -481,4 +486,4 @@ with tab_time:
         st.info("Aucune tâche planifiée.")
 
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v5.4** (Final - Fixed syntax) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v5.5** (Fixed Gantt Range) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
