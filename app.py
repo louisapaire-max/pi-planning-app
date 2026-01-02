@@ -4,8 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v5", layout="wide")
-st.title("📊 PI Planning - Capacity Planning avec Dépendances Éditables")
+st.set_page_config(page_title="PI Planning - Capacity Tool v5.6", layout="wide")
+st.title("📊 PI Planning - Capacity Planning avec Dépendances & Sizing")
 
 HOLIDAYS_2026 = [
     "2026-01-01", "2026-04-06", "2026-05-01", "2026-05-08", 
@@ -74,8 +74,17 @@ PROJECTS = [
     {"name": "Revamp Telephony", "priority": 15},
 ]
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION STATE
+# ═══════════════════════════════════════════════════════════════════════════════
+
 if "tasks_config" not in st.session_state:
     st.session_state.tasks_config = {task["name"]: task.copy() for task in TASKS_DEFAULT}
+
+if "projects_tasks" not in st.session_state:
+    st.session_state.projects_tasks = {}
+    for proj in PROJECTS:
+        st.session_state.projects_tasks[proj["name"]] = [t["name"] for t in TASKS_DEFAULT]
 
 if "capacity" not in st.session_state:
     st.session_state.capacity = {}
@@ -95,6 +104,10 @@ if "run_days" not in st.session_state:
         for it in ITERATIONS:
             st.session_state.run_days[(team, it["name"])] = 0.0
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# FONCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def get_net_capacity(team: str, iteration: dict) -> float:
     key = (team, iteration["name"])
     brute = st.session_state.capacity.get(key, 0)
@@ -106,83 +119,73 @@ def get_tasks_list():
     return list(st.session_state.tasks_config.values())
 
 def calculate_planning():
+    """
+    Calcul du planning respectant VRAIMENT le sizing (en jours) et les dépendances.
+    """
     TASKS = get_tasks_list()
-    
-    remaining = {}
-    for team in TEAMS:
-        for it in ITERATIONS:
-            remaining[(team, it["name"])] = get_net_capacity(team, it)
-    
     planning = []
-    task_completion_index = {}
-
+    task_dates = {}
+    
+    first_iter_start = pd.to_datetime(ITERATIONS[0]["start"])
+    current_date = first_iter_start
+    
     for project in sorted(PROJECTS, key=lambda x: x["priority"]):
+        project_tasks = st.session_state.projects_tasks.get(project["name"], [])
+        
         for task in sorted(TASKS, key=lambda t: t["order"]):
-            placed = False
+            if task["name"] not in project_tasks:
+                continue
             
-            start_search_index = 0
-            parent_end_date = None
+            start_date = current_date
             
             if task["depends_on"]:
                 parent_key = f"{project['name']}_{task['depends_on']}"
-                if parent_key in task_completion_index:
-                    start_search_index, parent_end_date = task_completion_index[parent_key]
+                if parent_key in task_dates:
+                    _, parent_end_date = task_dates[parent_key]
+                    start_date = parent_end_date + timedelta(days=1)
                 else:
-                    start_search_index = 999
-
-            if start_search_index < len(ITERATIONS):
-                for idx in range(start_search_index, len(ITERATIONS)):
-                    it = ITERATIONS[idx]
-                    key = (task["team"], it["name"])
-                    
-                    if (remaining.get(key, 0) >= task["charge"]):
-                        remaining[key] -= task["charge"]
-                        
-                        start_date_str = it["start"]
-                        if parent_end_date:
-                            start_date_obj = pd.to_datetime(parent_end_date) + timedelta(days=1)
-                            start_date_str = start_date_obj.strftime("%Y-%m-%d")
-                        
-                        planning.append({
-                            "Priorité": project["priority"],
-                            "Projet": project["name"],
-                            "Tâche": task["name"],
-                            "Équipe": task["team"],
-                            "Itération": it["name"],
-                            "Début": start_date_str,
-                            "Fin": it["end"],
-                            "Charge": task["charge"],
-                            "Dépendance": task["depends_on"],
-                            "Statut": "✅ Planifié"
-                        })
-                        
-                        task_completion_index[f"{project['name']}_{task['name']}"] = (idx, it["end"])
-                        placed = True
-                        break
+                    planning.append({
+                        "Priorité": project["priority"],
+                        "Projet": project["name"],
+                        "Tâche": task["name"],
+                        "Équipe": task["team"],
+                        "Début": None,
+                        "Fin": None,
+                        "Charge": task["charge"],
+                        "Dépendance": task["depends_on"],
+                        "Statut": "❌ Bloqué"
+                    })
+                    continue
             
-            if not placed:
-                planning.append({
-                    "Priorité": project["priority"],
-                    "Projet": project["name"],
-                    "Tâche": task["name"],
-                    "Équipe": task["team"],
-                    "Itération": "⚠️ Dépassement",
-                    "Début": None,
-                    "Fin": None,
-                    "Charge": task["charge"],
-                    "Dépendance": task["depends_on"],
-                    "Statut": "❌ Bloqué"
-                })
+            end_date = start_date + timedelta(days=task["charge"])
+            
+            task_key = f"{project['name']}_{task['name']}"
+            task_dates[task_key] = (start_date, end_date)
+            
+            planning.append({
+                "Priorité": project["priority"],
+                "Projet": project["name"],
+                "Tâche": task["name"],
+                "Équipe": task["team"],
+                "Début": start_date.strftime("%Y-%m-%d"),
+                "Fin": end_date.strftime("%Y-%m-%d"),
+                "Charge": task["charge"],
+                "Dépendance": task["depends_on"],
+                "Statut": "✅ Planifié"
+            })
     
-    return planning, remaining
+    return planning, task_dates
 
 # Calcul planning
-planning, remaining = calculate_planning()
+planning, task_dates = calculate_planning()
 df_plan = pd.DataFrame(planning)
 
+# ═══════════════════════════════════════════════════════════════════════════════
 # KPIs
+# ═══════════════════════════════════════════════════════════════════════════════
+
 st.markdown("### 📊 Vue d'Ensemble - KPIs")
-col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
 
 with col_kpi1:
     total_taches = len(df_plan)
@@ -197,21 +200,25 @@ with col_kpi3:
     st.metric("❌ Bloquées", bloquees, f"{bloquees/total_taches*100:.0f}%" if total_taches > 0 else "0%")
 
 with col_kpi4:
-    capa_restante_moy = sum(remaining.values()) / len(remaining) if remaining else 0
-    st.metric("📦 Capa Moy", f"{capa_restante_moy:.1f}j")
-
-with col_kpi5:
-    taux_util = (1 - (capa_restante_moy / 10)) * 100 if capa_restante_moy >= 0 else 0
-    st.metric("📈 Taux Util", f"{min(100, taux_util):.0f}%")
+    if not df_plan.empty and not df_plan[df_plan["Début"].notna()].empty:
+        duree_total = (pd.to_datetime(df_plan[df_plan["Début"].notna()]["Fin"].max()) - 
+                       pd.to_datetime(df_plan[df_plan["Début"].notna()]["Début"].min())).days
+        st.metric("📅 Durée Totale", f"{duree_total} jours")
+    else:
+        st.metric("📅 Durée Totale", "N/A")
 
 st.divider()
 
-tab_config, tab_planning, tab_capa, tab_cong, tab_time = st.tabs([
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLETS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+tab_config, tab_projects, tab_planning, tab_capa, tab_cong = st.tabs([
     "⚙️ Configuration Tâches",
-    "📋 Planning & ETA",
+    "🎯 Projets & Tâches",
+    "📋 Planning & Gantt",
     "📊 Capacités",
-    "🏖️ Congés & Run",
-    "📈 Timeline Globale"
+    "🏖️ Congés & Run"
 ])
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -287,29 +294,69 @@ with tab_config:
             else:
                 st.session_state.tasks_config[task["name"]]["depends_on"] = new_dep
     
-    if st.button("💾 Sauvegarder les modifications", key="save_config"):
+    if st.button("💾 Sauvegarder Configuration", key="save_config"):
         st.success("✅ Configuration mise à jour !")
         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 1: PLANNING
+# ONGLET 1: PROJETS & TÂCHES
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_projects:
+    st.subheader("🎯 Gérer les Tâches par Projet")
+    
+    all_task_names = [t["name"] for t in get_tasks_list()]
+    
+    selected_proj = st.selectbox("Sélectionner un projet", options=[p["name"] for p in PROJECTS])
+    
+    if selected_proj:
+        current_tasks = st.session_state.projects_tasks.get(selected_proj, [])
+        
+        st.markdown(f"#### Tâches du projet: **{selected_proj}**")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Tâches actuelles ✅**")
+            for task_name in current_tasks:
+                col_task, col_remove = st.columns([4, 1])
+                with col_task:
+                    st.text(task_name)
+                with col_remove:
+                    if st.button("❌", key=f"remove_{task_name}", help="Supprimer"):
+                        st.session_state.projects_tasks[selected_proj].remove(task_name)
+                        st.rerun()
+        
+        with col2:
+            st.markdown("**Ajouter une tâche ➕**")
+            available_tasks = [t for t in all_task_names if t not in current_tasks]
+            
+            if available_tasks:
+                new_task = st.selectbox("Sélectionner une tâche à ajouter", options=available_tasks)
+                if st.button("➕ Ajouter", key="add_task"):
+                    st.session_state.projects_tasks[selected_proj].append(new_task)
+                    st.rerun()
+            else:
+                st.info("Toutes les tâches sont déjà assignées à ce projet.")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ONGLET 2: PLANNING & GANTT
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_planning:
-    st.subheader("📋 Planning détaillé & Gantt par Projet")
+    st.subheader("📋 Planning détaillé & Gantt")
     
     if not df_plan.empty:
         df_plan["Start Date"] = pd.to_datetime(df_plan["Début"], errors='coerce')
         df_plan["End Date"] = pd.to_datetime(df_plan["Fin"], errors='coerce')
 
     project_list = ["Vue Globale"] + sorted(list(df_plan["Projet"].unique())) if not df_plan.empty else []
-    selected_project = st.selectbox("🎯 Sélectionner un projet", options=project_list)
+    selected_project = st.selectbox("🎯 Sélectionner un projet", options=project_list, key="gantt_project")
     
     st.divider()
 
     if selected_project == "Vue Globale":
         st.info("📊 Vue globale de toutes les tâches")
         
-        display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Itération", "Charge", "Dépendance", "Statut"]
+        display_cols = ["Priorité", "Projet", "Tâche", "Équipe", "Début", "Fin", "Charge", "Dépendance", "Statut"]
         
         st.dataframe(
             df_plan[display_cols].sort_values("Priorité"),
@@ -364,7 +411,6 @@ with tab_planning:
                         annotation_font_size=10
                     )
 
-                # ✅ LIMITE LE GANTT AUX ITÉRATIONS SEULEMENT
                 first_iteration_start = ITERATIONS[0]["start"]
                 last_iteration_end = ITERATIONS[-1]["end"]
                 
@@ -383,7 +429,7 @@ with tab_planning:
                 st.warning("⚠️ Aucune tâche avec dates valides.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 2: CAPACITÉS
+# ONGLET 3: CAPACITÉS
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_capa:
     st.subheader("📊 Capacités Brutes (Jours)")
@@ -417,7 +463,7 @@ with tab_capa:
     st.metric("📦 Capacité totale", f"{edited_cap.sum().sum():.1f} jours")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 3: CONGÉS & RUN
+# ONGLET 4: CONGÉS & RUN
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_cong:
     st.subheader("🏖️ Congés & Support")
@@ -456,34 +502,5 @@ with tab_cong:
             for jdx, it in enumerate(ITERATIONS):
                 st.session_state.run_days[(team, it["name"])] = edited_run.iloc[idx, jdx]
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ONGLET 4: TIMELINE
-# ═══════════════════════════════════════════════════════════════════════════════
-with tab_time:
-    st.subheader("📈 Vue par Itération")
-    
-    df_gantt_global = df_plan[df_plan["Statut"] == "✅ Planifié"]
-    
-    if not df_gantt_global.empty:
-        col1, col2, col3 = st.columns(3)
-        cols = [col1, col2, col3]
-        
-        for idx, it in enumerate(ITERATIONS):
-            with cols[idx % 3]:
-                st.markdown(f"#### {it['name']}")
-                tasks_it = df_gantt_global[df_gantt_global["Itération"] == it["name"]]
-                
-                if not tasks_it.empty:
-                    load_per_project = tasks_it.groupby("Projet")["Charge"].sum().reset_index()
-                    st.dataframe(
-                        load_per_project.style.background_gradient(cmap="Blues"), 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-                else:
-                    st.caption("Aucune tâche.")
-    else:
-        st.info("Aucune tâche planifiée.")
-
 st.divider()
-st.markdown(f"🛠 **PI Planning Tool v5.5** (Fixed Gantt Range) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown(f"🛠 **PI Planning Tool v5.6** (Sizing & Dependencies Fixed) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
