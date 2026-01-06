@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
+import io
 
-st.set_page_config(page_title="PI Planning Editor v11.3", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v12.0", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -150,7 +151,6 @@ if "df_with_dates" not in st.session_state:
     st.session_state.df_with_dates = None
     st.session_state.data_hash = None
 
-# Initialisation des filtres persistants
 if "selected_projects" not in st.session_state:
     st.session_state.selected_projects = []
 if "selected_teams" not in st.session_state:
@@ -159,6 +159,10 @@ if "selected_phases" not in st.session_state:
     st.session_state.selected_phases = []
 if "selected_tasks" not in st.session_state:
     st.session_state.selected_tasks = []
+
+# Nouveau: État pour le projet sélectionné via boutons
+if "active_project" not in st.session_state:
+    st.session_state.active_project = None
 
 # ═══════════════════════════════════════════════════════════
 # FONCTIONS UTILITAIRES
@@ -236,27 +240,21 @@ def create_gantt_chart(df_source):
     
     df = df_source.copy()
     
-    # Correction tâches d'un jour
     same_day = df['Start_Date'].dt.date == df['End_Date'].dt.date
     no_hours = (df['Start_Date'].dt.hour == 0) & (df['End_Date'].dt.hour == 0)
     mask = same_day & no_hours
     df.loc[mask, 'Start_Date'] += pd.Timedelta(hours=9)
     df.loc[mask, 'End_Date'] += pd.Timedelta(hours=18)
     
-    # TRI PAR DATE DE DÉBUT
     df = df.sort_values(['Start_Date', 'Projet', 'Phase'])
     
-    # Labels hiérarchiques
     df['Projet_Court'] = df['Projet'].apply(lambda x: x[:35] + '...' if len(x) > 35 else x)
     df['Label_Hiérarchique'] = df['Projet_Court'] + ' | ' + df['Phase'] + ' | ' + df['Tâche']
     
-    # Identification jalons
     df['Type_Tache'] = df['Tâche'].apply(lambda x: '🎯 JALON' if is_prod_task(x) else 'Tâche')
     
-    # Durée en jours
     df['Durée_Jours'] = (df['End_Date'] - df['Start_Date']).dt.days + 1
     
-    # Création Gantt SANS TITRE
     fig = px.timeline(
         df,
         x_start='Start_Date',
@@ -277,7 +275,6 @@ def create_gantt_chart(df_source):
         height=max(700, len(df) * 40)
     )
     
-    # Itérations avec dégradés
     colors_bg = [
         "rgba(230, 230, 250, 0.25)",
         "rgba(200, 230, 255, 0.3)",
@@ -302,7 +299,6 @@ def create_gantt_chart(df_source):
             line_color="rgba(100,100,100,0.4)"
         )
     
-    # Grille hebdomadaire
     start_date = df['Start_Date'].min()
     end_date = df['End_Date'].max()
     
@@ -323,7 +319,6 @@ def create_gantt_chart(df_source):
             line_color="rgba(150,150,150,0.3)"
         )
     
-    # Ligne "Aujourd'hui"
     today = datetime.now().date().isoformat()
     fig.add_shape(
         type="line", x0=today, x1=today, y0=0, y1=1,
@@ -340,7 +335,6 @@ def create_gantt_chart(df_source):
         borderwidth=1
     )
     
-    # Axes
     fig.update_xaxes(
         title="<b>Calendrier 2026</b>",
         tickformat="%d/%m",
@@ -363,7 +357,6 @@ def create_gantt_chart(df_source):
         gridcolor="rgba(200,200,200,0.2)"
     )
     
-    # Layout professionnel
     fig.update_layout(
         showlegend=True,
         legend=dict(
@@ -389,7 +382,6 @@ def create_gantt_chart(df_source):
         )
     )
     
-    # Annotations PROD
     prods = df[df['Tâche'].apply(is_prod_task)]
     for idx, row in prods.iterrows():
         fig.add_annotation(
@@ -408,12 +400,16 @@ def get_tasks_for_period(df, start_date, end_date):
     mask = (df['Start_Date'] <= end_date) & (df['End_Date'] >= start_date)
     return df[mask].sort_values('Start_Date')
 
+def dataframe_to_tsv(df):
+    """Convertit DataFrame en TSV pour copier-coller dans Excel"""
+    return df.to_csv(sep='\t', index=False)
+
 # ═══════════════════════════════════════════════════════════
 # INTERFACE UTILISATEUR
 # ═══════════════════════════════════════════════════════════
-tab1, tab2 = st.tabs(["📊 Planning & Gantt", "📅 Vue Temporelle"])
+tab1, tab2, tab3 = st.tabs(["📊 Planning Cross-Projet", "🔍 Vue par Projet", "📅 Vue Temporelle"])
 
-# TAB 1: PLANNING PRINCIPAL
+# TAB 1: PLANNING CROSS-PROJET
 with tab1:
     st.subheader("📊 Visualisation Gantt et Tableau des Tâches")
     
@@ -498,7 +494,7 @@ with tab1:
                 (df_cached['Tâche'].isin(selected_tasks))
             ]
             
-            # Gantt SANS le message "X tâches affichées"
+            # Gantt
             fig = create_gantt_chart(df_filtered)
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
@@ -514,10 +510,10 @@ with tab1:
             df_view = df_view.sort_values('Start_Date')
             df_view["Début"] = df_view["Start_Date"].apply(format_with_day)
             df_view["Fin"] = df_view["End_Date"].apply(format_with_day)
-            df_view = df_view.drop(columns=["Start_Date", "End_Date"])
+            df_display = df_view.drop(columns=["Start_Date", "End_Date"])
             
             edited_df = st.data_editor(
-                df_view,
+                df_display,
                 num_rows="dynamic",
                 use_container_width=True,
                 column_config={
@@ -534,7 +530,8 @@ with tab1:
                 height=400
             )
             
-            col1, col2, col3 = st.columns([2, 2, 6])
+            # Boutons d'action
+            col1, col2, col3, col4 = st.columns([2, 2, 2, 4])
             with col1:
                 if st.button("💾 Enregistrer", type="primary", use_container_width=True):
                     st.session_state.df_planning = edited_df.copy()
@@ -543,7 +540,19 @@ with tab1:
                     st.rerun()
             
             with col2:
-                csv = df_filtered.to_csv(index=False, encoding='utf-8-sig')
+                # Bouton copier pour Excel
+                tsv_data = dataframe_to_tsv(df_display)
+                st.download_button(
+                    label="📋 Copier (Excel)",
+                    data=tsv_data,
+                    file_name=f"planning_{datetime.now().strftime('%Y%m%d_%H%M')}.tsv",
+                    mime="text/tab-separated-values",
+                    use_container_width=True,
+                    help="Télécharger en TSV pour coller directement dans Excel"
+                )
+            
+            with col3:
+                csv = df_display.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
                     label="📥 CSV",
                     data=csv,
@@ -552,14 +561,140 @@ with tab1:
                     use_container_width=True
                 )
             
-            with col3:
+            with col4:
                 if st.button("🔄 Réinitialiser", use_container_width=True):
                     st.session_state.df_planning = pd.DataFrame(DEFAULT_DATA)
                     st.session_state.data_hash = None
                     st.rerun()
 
-# TAB 2: VUE TEMPORELLE
+# TAB 2: VUE PAR PROJET
 with tab2:
+    st.subheader("🔍 Vue Détaillée par Projet")
+    
+    if not st.session_state.df_planning.empty:
+        df_cached = get_cached_df()
+        
+        if not df_cached.empty:
+            all_projects = sorted(df_cached['Projet'].unique())
+            
+            # Sélection par boutons
+            st.markdown("### 📂 Sélectionnez un projet :")
+            
+            # Afficher les boutons en grille (3 par ligne)
+            num_cols = 3
+            project_chunks = [all_projects[i:i+num_cols] for i in range(0, len(all_projects), num_cols)]
+            
+            for chunk in project_chunks:
+                cols = st.columns(num_cols)
+                for idx, project in enumerate(chunk):
+                    with cols[idx]:
+                        # Compter les tâches
+                        task_count = len(df_cached[df_cached['Projet'] == project])
+                        is_active = st.session_state.active_project == project
+                        
+                        button_type = "primary" if is_active else "secondary"
+                        if st.button(
+                            f"{'✅ ' if is_active else ''}{project[:30]}{'...' if len(project) > 30 else ''}\n({task_count} tâches)",
+                            key=f"btn_project_{project}",
+                            type=button_type,
+                            use_container_width=True
+                        ):
+                            st.session_state.active_project = project
+                            st.rerun()
+            
+            st.divider()
+            
+            # Afficher le détail du projet sélectionné
+            if st.session_state.active_project:
+                selected_project = st.session_state.active_project
+                st.markdown(f"## 📊 Projet : **{selected_project}**")
+                
+                # Filtrer les données du projet
+                df_project = df_cached[df_cached['Projet'] == selected_project].copy()
+                
+                # Métriques du projet
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("📝 Tâches", len(df_project))
+                with col2:
+                    st.metric("👥 Équipes", df_project['Équipe'].nunique())
+                with col3:
+                    phases_text = ", ".join(df_project['Phase'].unique())
+                    st.metric("⚙️ Phases", phases_text)
+                with col4:
+                    prod_tasks = df_project[df_project['Tâche'].apply(is_prod_task)]
+                    if not prod_tasks.empty:
+                        prod_date = prod_tasks['End_Date'].max()
+                        st.metric("🚀 Livraison", prod_date.strftime('%d/%m/%Y'))
+                    else:
+                        st.metric("🚀 Livraison", "N/A")
+                
+                st.divider()
+                
+                # Gantt du projet
+                st.markdown("### 📊 Gantt du Projet")
+                fig_project = create_gantt_chart(df_project)
+                if fig_project:
+                    st.plotly_chart(fig_project, use_container_width=True)
+                
+                st.divider()
+                
+                # Tableau éditable du projet
+                st.markdown("### 📝 Détail des Tâches")
+                
+                df_project_view = df_project.sort_values('Start_Date')
+                df_project_view["Début"] = df_project_view["Start_Date"].apply(format_with_day)
+                df_project_view["Fin"] = df_project_view["End_Date"].apply(format_with_day)
+                df_project_display = df_project_view.drop(columns=["Start_Date", "End_Date"])
+                
+                edited_project_df = st.data_editor(
+                    df_project_display,
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    column_config={
+                        "Projet": st.column_config.TextColumn("Projet", width="large"),
+                        "Jira": st.column_config.TextColumn("Jira", width="small"),
+                        "Phase": st.column_config.SelectboxColumn("Phase", options=["DESIGN", "DEV"], required=True),
+                        "Tâche": st.column_config.TextColumn("Tâche", width="medium"),
+                        "Équipe": st.column_config.SelectboxColumn("Équipe", options=list(TEAM_COLORS.keys()), required=True),
+                        "Début": st.column_config.TextColumn("Début"),
+                        "Fin": st.column_config.TextColumn("Fin"),
+                    },
+                    hide_index=False,
+                    key="data_editor_project",
+                    height=400
+                )
+                
+                # Boutons d'action pour le projet
+                col1, col2, col3 = st.columns([2, 2, 6])
+                with col1:
+                    if st.button("💾 Sauvegarder Projet", type="primary", use_container_width=True, key="save_project"):
+                        # Mettre à jour uniquement les lignes du projet dans le DataFrame global
+                        df_global = st.session_state.df_planning.copy()
+                        # Supprimer les anciennes lignes du projet
+                        df_global = df_global[df_global['Projet'] != selected_project]
+                        # Ajouter les nouvelles lignes
+                        df_global = pd.concat([df_global, edited_project_df], ignore_index=True)
+                        st.session_state.df_planning = df_global
+                        st.session_state.data_hash = None
+                        st.success(f"✅ Projet '{selected_project}' sauvegardé dans le planning global !")
+                        st.rerun()
+                
+                with col2:
+                    tsv_project = dataframe_to_tsv(df_project_display)
+                    st.download_button(
+                        label="📋 Copier (Excel)",
+                        data=tsv_project,
+                        file_name=f"projet_{selected_project.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.tsv",
+                        mime="text/tab-separated-values",
+                        use_container_width=True
+                    )
+                
+            else:
+                st.info("👆 Cliquez sur un bouton de projet ci-dessus pour afficher ses détails")
+
+# TAB 3: VUE TEMPORELLE
+with tab3:
     st.subheader("📅 Vue Temporelle - Aujourd'hui, Cette Semaine, Semaine Prochaine")
     
     if not st.session_state.df_planning.empty:
@@ -582,44 +717,4 @@ with tab2:
             
             # Tâches aujourd'hui
             st.markdown(f"## 📍 Aujourd'hui - {today.strftime('%A %d/%m/%Y')}")
-            tasks_today = get_tasks_for_period(df_cached, today_dt, today_dt)
-            
-            if not tasks_today.empty:
-                for _, row in tasks_today.iterrows():
-                    emoji = "🚀 " if is_prod_task(row['Tâche']) else ""
-                    st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']})")
-            else:
-                st.info("Aucune tâche prévue aujourd'hui")
-            
-            st.divider()
-            
-            # Tâches cette semaine
-            st.markdown(f"## 📅 Cette semaine - du {start_of_week.strftime('%d/%m')} au {end_of_week.strftime('%d/%m/%Y')}")
-            tasks_week = get_tasks_for_period(df_cached, start_week_dt, end_week_dt)
-            
-            if not tasks_week.empty:
-                for _, row in tasks_week.iterrows():
-                    start_str = format_with_day(row['Start_Date'])
-                    end_str = format_with_day(row['End_Date'])
-                    emoji = "🚀 " if is_prod_task(row['Tâche']) else ""
-                    st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
-            else:
-                st.info("Aucune tâche prévue cette semaine")
-            
-            st.divider()
-            
-            # Tâches semaine prochaine
-            st.markdown(f"## 📆 Semaine prochaine - du {start_of_next_week.strftime('%d/%m')} au {end_of_next_week.strftime('%d/%m/%Y')}")
-            tasks_next = get_tasks_for_period(df_cached, start_next_dt, end_next_dt)
-            
-            if not tasks_next.empty:
-                for _, row in tasks_next.iterrows():
-                    start_str = format_with_day(row['Start_Date'])
-                    end_str = format_with_day(row['End_Date'])
-                    emoji = "🚀 " if is_prod_task(row['Tâche']) else ""
-                    st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
-            else:
-                st.info("Aucune tâche prévue la semaine prochaine")
-
-st.divider()
-st.caption(f"PI Planning Tool v11.3 (Optimisé) | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            t
