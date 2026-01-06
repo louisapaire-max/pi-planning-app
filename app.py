@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date, timedelta
 import io
 
-st.set_page_config(page_title="PI Planning - Capacity Tool v9.0", layout="wide")
+st.set_page_config(page_title="PI Planning - Capacity Tool v9.1", layout="wide")
 st.title("📊 PI Planning - Capacity Planning avec Import Excel")
 
 HOLIDAYS_2026 = [
@@ -45,7 +45,20 @@ TEAM_COLORS = {
 if "imported_data" not in st.session_state:
     st.session_state.imported_data = None
 
-# FONCTION PARSER
+# FONCTION PARSER AVEC GESTION DES HEURES
+def parse_date_with_hours(date_str):
+    """Parse une date avec ou sans heures"""
+    date_str = str(date_str).strip()
+    
+    # Essayer d'abord avec heures (DD/MM/YYYY HH:MM)
+    for fmt in ['%d/%m/%Y %H:%M', '%d/%m/%Y']:
+        try:
+            return pd.to_datetime(date_str, format=fmt)
+        except:
+            continue
+    
+    return pd.NaT
+
 def parse_excel_paste(text_data):
     """Parse le texte collé depuis Excel"""
     lines = text_data.strip().split('\n')
@@ -96,17 +109,25 @@ def parse_excel_paste(text_data):
 
     return pd.DataFrame(all_data)
 
-# FONCTION GANTT
+# FONCTION GANTT AVEC GESTION DES HEURES
 def create_gantt_from_imported_data(df_data):
-    """Crée un Gantt chart"""
+    """Crée un Gantt chart avec gestion des tâches d'une journée"""
     if df_data.empty:
         return None
 
     df_copy = df_data.copy()
 
-    # Convertir dates
-    df_copy['Start Date'] = pd.to_datetime(df_copy['Début'], format='%d/%m/%Y', errors='coerce')
-    df_copy['End Date'] = pd.to_datetime(df_copy['Fin'], format='%d/%m/%Y', errors='coerce')
+    # Convertir dates avec gestion des heures
+    df_copy['Start Date'] = df_copy['Début'].apply(parse_date_with_hours)
+    df_copy['End Date'] = df_copy['Fin'].apply(parse_date_with_hours)
+
+    # Pour les tâches d'une seule journée sans heures, ajouter une durée minimale
+    same_day_mask = (df_copy['Start Date'].dt.date == df_copy['End Date'].dt.date)
+    no_time_mask = (df_copy['Start Date'].dt.hour == 0) & (df_copy['End Date'].dt.hour == 0)
+    
+    # Ajouter 9 heures de durée pour les tâches d'un jour sans heures spécifiées
+    df_copy.loc[same_day_mask & no_time_mask, 'Start Date'] = df_copy.loc[same_day_mask & no_time_mask, 'Start Date'] + pd.Timedelta(hours=9)
+    df_copy.loc[same_day_mask & no_time_mask, 'End Date'] = df_copy.loc[same_day_mask & no_time_mask, 'End Date'] + pd.Timedelta(hours=18)
 
     # Label
     df_copy['Label'] = df_copy['Projet'] + ' - ' + df_copy['Tâche']
@@ -208,10 +229,13 @@ with tab_import:
         ```
         PROJET 1: Nom du projet
         Jira: LVL2-XXXXX
-        Phase    Tâche              Équipe    Début       Fin
-        DESIGN   Documentation      PO        12/01/2026  30/01/2026
-        DEV      Dev Website        Dev       02/02/2026  20/02/2026
+        Phase    Tâche              Équipe    Début              Fin
+        DESIGN   Documentation      PO        12/01/2026         30/01/2026
+        DEV      Dev Website        Dev       02/02/2026         20/02/2026
+        DEV      PROD               PO        12/02/2026 09:00   12/02/2026 18:00
         ```
+        
+        **Note :** Les dates peuvent inclure des heures (HH:MM) pour les tâches d'une journée.
         """)
 
     # Données d'exemple
@@ -241,7 +265,7 @@ DEV	PROD	PO	02/02/2026	19/02/2026"""
         value=example_data if st.session_state.imported_data is None else "",
         height=450,
         key="excel_input",
-        help="Copiez-collez directement depuis Excel (Ctrl+C puis Ctrl+V)"
+        help="Copiez-collez directement depuis Excel (Ctrl+C puis Ctrl+V). Format dates accepté : DD/MM/YYYY ou DD/MM/YYYY HH:MM"
     )
 
     col1, col2, col3 = st.columns([2, 2, 6])
@@ -340,7 +364,7 @@ DEV	PROD	PO	02/02/2026	19/02/2026"""
 
         # Trier par projet et date
         df_display = df_filtered.copy()
-        df_display['Début_sort'] = pd.to_datetime(df_display['Début'], format='%d/%m/%Y', errors='coerce')
+        df_display['Début_sort'] = df_display['Début'].apply(parse_date_with_hours)
         df_display = df_display.sort_values(['Projet', 'Début_sort'])
         df_display = df_display.drop('Début_sort', axis=1)
 
@@ -420,4 +444,4 @@ with tab_stats:
         st.info("📥 Importez d'abord des données depuis l'onglet 'Import Excel'")
 
 st.divider()
-st.caption(f"Version 9.0 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"Version 9.1 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
