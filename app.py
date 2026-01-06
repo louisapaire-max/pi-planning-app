@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-st.set_page_config(page_title="PI Planning Editor v10.3", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v10.4", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -161,6 +161,19 @@ def parse_date_safe(date_str):
             continue
     return pd.NaT
 
+def format_with_day(dt):
+    """Formate une date avec le jour de la semaine"""
+    if pd.isna(dt):
+        return ""
+    weekday_map = {
+        0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi",
+        4: "Vendredi", 5: "Samedi", 6: "Dimanche"
+    }
+    day = weekday_map[int(dt.weekday())]
+    if dt.hour == 0 and dt.minute == 0:
+        return f"{day} {dt.strftime('%d/%m/%Y')}"
+    return f"{day} {dt.strftime('%d/%m/%Y %H:%M')}"
+
 def create_gantt_chart(df_source):
     """Crée un Gantt optimisé avec groupement et jalons"""
     if df_source.empty:
@@ -181,8 +194,10 @@ def create_gantt_chart(df_source):
     df.loc[mask, 'Start_Date'] += pd.Timedelta(hours=9)
     df.loc[mask, 'End_Date'] += pd.Timedelta(hours=18)
     
+    # TRI PAR DATE DE DÉBUT
+    df = df.sort_values(['Start_Date', 'Projet', 'Phase'])
+    
     # Labels hiérarchiques
-    df = df.sort_values(['Projet', 'Phase', 'Start_Date'])
     df['Projet_Court'] = df['Projet'].apply(lambda x: x[:35] + '...' if len(x) > 35 else x)
     df['Label_Hiérarchique'] = df['Projet_Court'] + ' | ' + df['Phase'] + ' | ' + df['Tâche']
     
@@ -216,7 +231,7 @@ def create_gantt_chart(df_source):
         height=max(700, len(df) * 40)
     )
     
-    # Itérations avec dégradés
+    # Itérations avec dégradés (annotations plus petites)
     colors_bg = [
         "rgba(230, 230, 250, 0.25)",
         "rgba(200, 230, 255, 0.3)",
@@ -230,24 +245,22 @@ def create_gantt_chart(df_source):
             x0=it["start"], x1=it["end"],
             fillcolor=colors_bg[i % len(colors_bg)],
             layer="below", line_width=0,
-            annotation_text=f"<b>{it['name']}</b><br>{it['start']} → {it['end']}",
+            annotation_text=f"<b>{it['name']}</b>",
             annotation_position="top left",
-            annotation_font=dict(size=10, color="darkblue", family="Arial Black")
+            annotation_font=dict(size=8, color="darkblue", family="Arial")
         )
         fig.add_vline(
             x=it["end"], 
-            line_width=2, 
+            line_width=1, 
             line_dash="dash", 
-            line_color="rgba(100,100,100,0.5)"
+            line_color="rgba(100,100,100,0.4)"
         )
     
-    # ✅ CORRECTION: Grille hebdomadaire sans .floor()
+    # Grille hebdomadaire
     start_date = df['Start_Date'].min()
     end_date = df['End_Date'].max()
     
-    # Trouver le lundi précédent la date de début
     start_monday = start_date - pd.Timedelta(days=start_date.weekday())
-    # Trouver le dimanche suivant la date de fin
     end_sunday = end_date + pd.Timedelta(days=(6 - end_date.weekday()))
     
     date_range = pd.date_range(
@@ -264,26 +277,21 @@ def create_gantt_chart(df_source):
             line_color="rgba(150,150,150,0.3)"
         )
     
-    # Ligne "Aujourd'hui"
+    # Ligne "Aujourd'hui" (plus discrète)
     today = datetime.now().date().isoformat()
     fig.add_shape(
         type="line", x0=today, x1=today, y0=0, y1=1,
         yref="paper", 
-        line=dict(color="red", width=4, dash="solid")
+        line=dict(color="rgba(255, 100, 100, 0.7)", width=2, dash="dash")
     )
     fig.add_annotation(
-        x=today, y=1.02, yref="paper",
-        text=f"<b>📍 AUJOURD'HUI</b><br>{datetime.now().strftime('%d/%m/%Y')}", 
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1.5,
-        arrowwidth=2,
-        arrowcolor="red",
-        yshift=15,
-        font=dict(size=13, color="red", family="Arial Black"),
-        bgcolor="rgba(255,255,255,0.9)",
-        bordercolor="red",
-        borderwidth=2
+        x=today, y=1.01, yref="paper",
+        text=f"Aujourd'hui ({datetime.now().strftime('%d/%m')})", 
+        showarrow=False,
+        font=dict(size=9, color="rgba(200, 50, 50, 0.8)", family="Arial"),
+        bgcolor="rgba(255,255,255,0.7)",
+        bordercolor="rgba(255, 100, 100, 0.5)",
+        borderwidth=1
     )
     
     # Axes
@@ -301,7 +309,7 @@ def create_gantt_chart(df_source):
     )
     
     fig.update_yaxes(
-        title="<b>Tâches Hiérarchiques</b>",
+        title="<b>Tâches (par date de début)</b>",
         autorange="reversed",
         tickfont=dict(size=9),
         showgrid=True,
@@ -323,7 +331,7 @@ def create_gantt_chart(df_source):
             bordercolor="gray",
             borderwidth=1
         ),
-        margin=dict(t=150, b=80, l=500, r=200),
+        margin=dict(t=120, b=80, l=500, r=200),
         plot_bgcolor='rgba(250,250,250,1)',
         paper_bgcolor='white',
         font=dict(family="Arial, sans-serif", size=11),
@@ -352,7 +360,7 @@ def create_gantt_chart(df_source):
 # ═══════════════════════════════════════════════════════════
 # INTERFACE UTILISATEUR
 # ═══════════════════════════════════════════════════════════
-tab1, tab2, tab3 = st.tabs(["📝 Édition Excel", "📊 Gantt Chart", "📈 Statistiques"])
+tab1, tab2, tab3 = st.tabs(["📝 Édition Excel", "📊 Gantt & Tâches", "📈 Statistiques"])
 
 # TAB 1: ÉDITEUR EXCEL
 with tab1:
@@ -398,9 +406,9 @@ with tab1:
             st.session_state.df_planning = pd.DataFrame(DEFAULT_DATA)
             st.rerun()
 
-# TAB 2: GANTT
+# TAB 2: GANTT & TABLEAU
 with tab2:
-    st.subheader("📊 Visualisation Gantt Optimisée")
+    st.subheader("📊 Visualisation Gantt et Liste des Tâches")
     
     if not st.session_state.df_planning.empty:
         # Métriques
@@ -452,12 +460,34 @@ with tab2:
         
         st.info(f"📊 **{len(df_filtered)}** tâches affichées / **{len(st.session_state.df_planning)}** total")
         
-        # Gantt
-        fig = create_gantt_chart(df_filtered)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning("⚠️ Aucune donnée valide (vérifiez les dates)")
+        # Layout: tableau (gauche) + gantt (droite)
+        col_table, col_gantt = st.columns([5, 7], gap="large")
+        
+        with col_table:
+            st.markdown("#### 📋 Tâches filtrées")
+            df_view = df_filtered.copy()
+            
+            # Parsing pour fabriquer l'affichage jour+date
+            df_view["Start_Date"] = df_view["Début"].apply(parse_date_safe)
+            df_view["End_Date"] = df_view["Fin"].apply(parse_date_safe)
+            
+            # Tri par date de début
+            df_view = df_view.sort_values('Start_Date')
+            
+            df_view["Début"] = df_view["Start_Date"].apply(format_with_day)
+            df_view["Fin"] = df_view["End_Date"].apply(format_with_day)
+            
+            df_view = df_view.drop(columns=["Start_Date", "End_Date"])
+            
+            st.dataframe(df_view, use_container_width=True, height=650)
+        
+        with col_gantt:
+            st.markdown("#### 📊 Gantt (filtré)")
+            fig = create_gantt_chart(df_filtered)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("⚠️ Aucune donnée valide (vérifiez les dates)")
         
         # Export
         st.divider()
@@ -513,4 +543,4 @@ with tab3:
         st.dataframe(pivot, use_container_width=True)
 
 st.divider()
-st.caption(f"PI Planning Tool v10.3 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"PI Planning Tool v10.4 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
