@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="PI Planning Editor v12.1", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v12.2", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -127,8 +127,6 @@ if "selected_phases" not in st.session_state:
     st.session_state.selected_phases = []
 if "selected_tasks" not in st.session_state:
     st.session_state.selected_tasks = []
-if "active_project" not in st.session_state:
-    st.session_state.active_project = None
 
 # ═══════════════════════════════════════════════════════════
 # FONCTIONS
@@ -230,7 +228,7 @@ def dataframe_to_tsv(df):
 # ═══════════════════════════════════════════════════════════
 # INTERFACE
 # ═══════════════════════════════════════════════════════════
-tab1, tab2, tab3 = st.tabs(["📊 Planning Cross-Projet", "🔍 Vue par Projet", "📅 Vue Temporelle"])
+tab1, tab2 = st.tabs(["📊 Planning & Gantt", "📅 Vue Temporelle"])
 
 with tab1:
     st.subheader("📊 Gantt et Tableau")
@@ -310,57 +308,6 @@ with tab1:
                 st.rerun()
 
 with tab2:
-    st.subheader("🔍 Vue Projet")
-    df_cached = get_cached_df()
-    
-    if not df_cached.empty:
-        all_projects = sorted(df_cached['Projet'].unique())
-        
-        # DROPDOWN au lieu de boutons
-        selected_project = st.selectbox("📂 Sélectionnez un projet :", [""] + all_projects, index=0)
-        
-        if selected_project:
-            st.session_state.active_project = selected_project
-            st.markdown(f"## 📊 **{selected_project}**")
-            
-            df_project = df_cached[df_cached['Projet'] == selected_project].copy()
-            
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("📝 Tâches", len(df_project))
-            col2.metric("👥 Équipes", df_project['Équipe'].nunique())
-            col3.metric("⚙️ Phases", ", ".join(df_project['Phase'].unique()))
-            prod_tasks = df_project[df_project['Tâche'].apply(is_prod_task)]
-            if not prod_tasks.empty:
-                col4.metric("🚀 Livraison", prod_tasks['End_Date'].max().strftime('%d/%m/%Y'))
-            
-            st.divider()
-            fig_project = create_gantt_chart(df_project)
-            if fig_project:
-                st.plotly_chart(fig_project, use_container_width=True)
-            
-            st.divider()
-            df_project_view = df_project.sort_values('Start_Date')
-            df_project_view["Début"] = df_project_view["Start_Date"].apply(format_with_day)
-            df_project_view["Fin"] = df_project_view["End_Date"].apply(format_with_day)
-            df_project_display = df_project_view.drop(columns=["Start_Date", "End_Date"])
-            
-            edited_project_df = st.data_editor(df_project_display, num_rows="dynamic", use_container_width=True, height=400, key="data_editor_project")
-            
-            col1, col2 = st.columns([2, 8])
-            with col1:
-                if st.button("💾 Sauvegarder Projet", type="primary", use_container_width=True):
-                    df_global = st.session_state.df_planning[st.session_state.df_planning['Projet'] != selected_project]
-                    df_global = pd.concat([df_global, edited_project_df], ignore_index=True)
-                    st.session_state.df_planning = df_global
-                    st.session_state.data_hash = None
-                    st.success(f"✅ '{selected_project}' sauvegardé !")
-                    st.rerun()
-            with col2:
-                tsv_project = dataframe_to_tsv(df_project_display)
-                st.download_button("📋 Copier (Excel)", tsv_project, f"projet_{selected_project[:20].replace(' ', '_')}.tsv",
-                                   "text/tab-separated-values", use_container_width=True)
-
-with tab3:
     st.subheader("📅 Vue Temporelle")
     df_cached = get_cached_df()
     
@@ -401,4 +348,4 @@ with tab3:
             st.info("Aucune tâche la semaine prochaine")
 
 st.divider()
-st.caption(f"PI Planning Tool v12.1 (Optimisé) | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"PI Planning Tool v12.2 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
