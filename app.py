@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="PI Planning Editor v11.2", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v11.3", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -171,7 +171,6 @@ def parse_date_safe(date_str):
     for fmt in ['%d/%m/%Y %H:%M', '%d/%m/%Y']:
         try:
             parsed = pd.to_datetime(date_str, format=fmt)
-            # Validation: date dans une plage raisonnable
             if parsed.year < 2020 or parsed.year > 2030:
                 return pd.NaT
             return parsed
@@ -198,15 +197,11 @@ def format_with_day(dt):
 
 @st.cache_data(show_spinner=False)
 def compute_dates_cached(df_dict, data_version):
-    """
-    Cache des calculs de dates pour éviter le re-parsing
-    data_version est un hash pour invalider le cache quand les données changent
-    """
+    """Cache des calculs de dates pour éviter le re-parsing"""
     df = pd.DataFrame(df_dict)
     df['Start_Date'] = df['Début'].apply(parse_date_safe)
     df['End_Date'] = df['Fin'].apply(parse_date_safe)
     
-    # Validation: supprimer les lignes avec dates invalides
     invalid_dates = df[df['Start_Date'].isna() | df['End_Date'].isna()]
     if not invalid_dates.empty:
         st.warning(f"⚠️ {len(invalid_dates)} ligne(s) avec dates invalides détectée(s)")
@@ -215,7 +210,6 @@ def compute_dates_cached(df_dict, data_version):
     
     df = df.dropna(subset=['Start_Date', 'End_Date'])
     
-    # Validation: date de fin >= date de début
     invalid_range = df[df['End_Date'] < df['Start_Date']]
     if not invalid_range.empty:
         st.error(f"⚠️ {len(invalid_range)} tâche(s) avec date de fin < date de début")
@@ -226,10 +220,8 @@ def compute_dates_cached(df_dict, data_version):
 
 def get_cached_df():
     """Récupère le DataFrame avec dates calculées (avec cache)"""
-    # Créer un hash des données pour détecter les changements
     data_hash = pd.util.hash_pandas_object(st.session_state.df_planning).sum()
     
-    # Si les données ont changé ou pas encore calculées, recalculer
     if st.session_state.data_hash != data_hash:
         st.session_state.data_hash = data_hash
         df_dict = st.session_state.df_planning.to_dict('list')
@@ -264,7 +256,7 @@ def create_gantt_chart(df_source):
     # Durée en jours
     df['Durée_Jours'] = (df['End_Date'] - df['Start_Date']).dt.days + 1
     
-    # Création Gantt
+    # Création Gantt SANS TITRE
     fig = px.timeline(
         df,
         x_start='Start_Date',
@@ -282,7 +274,6 @@ def create_gantt_chart(df_source):
             'Start_Date': False,
             'End_Date': False
         },
-        title='<b>📊 Planning Q2 2026 - Vue Gantt Hiérarchique</b>',
         height=max(700, len(df) * 40)
     )
     
@@ -386,7 +377,7 @@ def create_gantt_chart(df_source):
             bordercolor="gray",
             borderwidth=1
         ),
-        margin=dict(t=120, b=80, l=500, r=200),
+        margin=dict(t=80, b=80, l=500, r=200),
         plot_bgcolor='rgba(250,250,250,1)',
         paper_bgcolor='white',
         font=dict(family="Arial, sans-serif", size=11),
@@ -427,7 +418,6 @@ with tab1:
     st.subheader("📊 Visualisation Gantt et Tableau des Tâches")
     
     if not st.session_state.df_planning.empty:
-        # Récupérer le DataFrame avec dates (cachées)
         df_cached = get_cached_df()
         
         if df_cached.empty:
@@ -455,7 +445,6 @@ with tab1:
             all_phases = sorted(df_cached['Phase'].unique())
             all_tasks = sorted(df_cached['Tâche'].unique())
             
-            # Initialiser les valeurs par défaut si vides
             if not st.session_state.selected_projects:
                 st.session_state.selected_projects = all_projects
             if not st.session_state.selected_teams:
@@ -509,10 +498,7 @@ with tab1:
                 (df_cached['Tâche'].isin(selected_tasks))
             ]
             
-            st.info(f"📊 **{len(df_filtered)}** tâches affichées / **{len(df_cached)}** total")
-            
-            # Gantt
-            st.markdown("### 📊 Diagramme de Gantt")
+            # Gantt SANS le message "X tâches affichées"
             fig = create_gantt_chart(df_filtered)
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
@@ -552,7 +538,7 @@ with tab1:
             with col1:
                 if st.button("💾 Enregistrer", type="primary", use_container_width=True):
                     st.session_state.df_planning = edited_df.copy()
-                    st.session_state.data_hash = None  # Force recalcul
+                    st.session_state.data_hash = None
                     st.success("✅ Sauvegardé !")
                     st.rerun()
             
@@ -582,7 +568,6 @@ with tab2:
         if not df_cached.empty:
             today = datetime.now().date()
             
-            # Calcul des périodes
             start_of_week = today - timedelta(days=today.weekday())
             end_of_week = start_of_week + timedelta(days=6)
             
@@ -637,4 +622,4 @@ with tab2:
                 st.info("Aucune tâche prévue la semaine prochaine")
 
 st.divider()
-st.caption(f"PI Planning Tool v11.2 (Optimisé) | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"PI Planning Tool v11.3 (Optimisé) | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
