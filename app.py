@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="PI Planning Editor v11.0", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v11.1", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -201,10 +201,9 @@ def create_gantt_chart(df_source):
     df['Projet_Court'] = df['Projet'].apply(lambda x: x[:35] + '...' if len(x) > 35 else x)
     df['Label_Hiérarchique'] = df['Projet_Court'] + ' | ' + df['Phase'] + ' | ' + df['Tâche']
     
-    # Identification jalons
+    # Identification jalons (SEULEMENT pour PROD exactement)
     df['Type_Tache'] = df['Tâche'].apply(lambda x: 
-        '🎯 JALON' if any(k in str(x).upper() for k in ['PROD', 'REFINEMENT', 'IMPACT']) 
-        else 'Tâche')
+        '🎯 JALON' if str(x).strip().upper() == 'PROD' else 'Tâche')
     
     # Durée en jours
     df['Durée_Jours'] = (df['End_Date'] - df['Start_Date']).dt.days + 1
@@ -343,8 +342,8 @@ def create_gantt_chart(df_source):
         )
     )
     
-    # Annotations PROD
-    prods = df[df['Tâche'].str.contains('PROD', case=False, na=False)]
+    # Annotations PROD (SEULEMENT pour les tâches "PROD" exactement)
+    prods = df[df['Tâche'].str.strip().str.upper() == 'PROD']
     for idx, row in prods.iterrows():
         fig.add_annotation(
             x=row['End_Date'],
@@ -388,7 +387,7 @@ with tab1:
             st.metric("👥 Équipes", st.session_state.df_planning['Équipe'].nunique())
         with col4:
             prod_count = st.session_state.df_planning[
-                st.session_state.df_planning['Tâche'].str.contains('PROD', case=False, na=False)
+                st.session_state.df_planning['Tâche'].str.strip().str.upper() == 'PROD'
             ].shape[0]
             st.metric("🚀 Livraisons", prod_count)
         
@@ -522,7 +521,8 @@ with tab2:
         
         if not tasks_today.empty:
             for _, row in tasks_today.iterrows():
-                st.markdown(f"- **{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']})")
+                emoji = "🚀 " if row['Tâche'].strip().upper() == 'PROD' else ""
+                st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']})")
         else:
             st.info("Aucune tâche prévue aujourd'hui")
         
@@ -536,7 +536,8 @@ with tab2:
             for _, row in tasks_week.iterrows():
                 start_str = format_with_day(row['Start_Date'])
                 end_str = format_with_day(row['End_Date'])
-                st.markdown(f"- **{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
+                emoji = "🚀 " if row['Tâche'].strip().upper() == 'PROD' else ""
+                st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
         else:
             st.info("Aucune tâche prévue cette semaine")
         
@@ -550,9 +551,10 @@ with tab2:
             for _, row in tasks_next.iterrows():
                 start_str = format_with_day(row['Start_Date'])
                 end_str = format_with_day(row['End_Date'])
-                st.markdown(f"- **{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
+                emoji = "🚀 " if row['Tâche'].strip().upper() == 'PROD' else ""
+                st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
         else:
             st.info("Aucune tâche prévue la semaine prochaine")
 
 st.divider()
-st.caption(f"PI Planning Tool v11.0 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"PI Planning Tool v11.1 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
