@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-st.set_page_config(page_title="PI Planning Editor v10.2", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v10.3", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -241,12 +241,21 @@ def create_gantt_chart(df_source):
             line_color="rgba(100,100,100,0.5)"
         )
     
-    # Grille hebdomadaire
+    # ✅ CORRECTION: Grille hebdomadaire sans .floor()
+    start_date = df['Start_Date'].min()
+    end_date = df['End_Date'].max()
+    
+    # Trouver le lundi précédent la date de début
+    start_monday = start_date - pd.Timedelta(days=start_date.weekday())
+    # Trouver le dimanche suivant la date de fin
+    end_sunday = end_date + pd.Timedelta(days=(6 - end_date.weekday()))
+    
     date_range = pd.date_range(
-        start=df['Start_Date'].min().floor('W'), 
-        end=df['End_Date'].max().ceil('W'), 
+        start=start_monday, 
+        end=end_sunday, 
         freq='W-MON'
     )
+    
     for monday in date_range:
         fig.add_vline(
             x=monday.isoformat(), 
@@ -504,4 +513,4 @@ with tab3:
         st.dataframe(pivot, use_container_width=True)
 
 st.divider()
-st.caption(f"PI Planning Tool v10.2 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"PI Planning Tool v10.3 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
