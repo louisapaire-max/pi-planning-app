@@ -717,4 +717,44 @@ with tab3:
             
             # Tâches aujourd'hui
             st.markdown(f"## 📍 Aujourd'hui - {today.strftime('%A %d/%m/%Y')}")
-            t
+            tasks_today = get_tasks_for_period(df_cached, today_dt, today_dt)
+            
+            if not tasks_today.empty:
+                for _, row in tasks_today.iterrows():
+                    emoji = "🚀 " if is_prod_task(row['Tâche']) else ""
+                    st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']})")
+            else:
+                st.info("Aucune tâche prévue aujourd'hui")
+            
+            st.divider()
+            
+            # Tâches cette semaine
+            st.markdown(f"## 📅 Cette semaine - du {start_of_week.strftime('%d/%m')} au {end_of_week.strftime('%d/%m/%Y')}")
+            tasks_week = get_tasks_for_period(df_cached, start_week_dt, end_week_dt)
+            
+            if not tasks_week.empty:
+                for _, row in tasks_week.iterrows():
+                    start_str = format_with_day(row['Start_Date'])
+                    end_str = format_with_day(row['End_Date'])
+                    emoji = "🚀 " if is_prod_task(row['Tâche']) else ""
+                    st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
+            else:
+                st.info("Aucune tâche prévue cette semaine")
+            
+            st.divider()
+            
+            # Tâches semaine prochaine
+            st.markdown(f"## 📆 Semaine prochaine - du {start_of_next_week.strftime('%d/%m')} au {end_of_next_week.strftime('%d/%m/%Y')}")
+            tasks_next = get_tasks_for_period(df_cached, start_next_dt, end_next_dt)
+            
+            if not tasks_next.empty:
+                for _, row in tasks_next.iterrows():
+                    start_str = format_with_day(row['Start_Date'])
+                    end_str = format_with_day(row['End_Date'])
+                    emoji = "🚀 " if is_prod_task(row['Tâche']) else ""
+                    st.markdown(f"- {emoji}**{row['Projet']}** [{row['Jira']}] - *{row['Phase']}* - {row['Tâche']} ({row['Équipe']}) | {start_str} → {end_str}")
+            else:
+                st.info("Aucune tâche prévue la semaine prochaine")
+
+st.divider()
+st.caption(f"PI Planning Tool v12.0 | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
