@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="PI Planning Editor v12.2", layout="wide")
+st.set_page_config(page_title="PI Planning Editor v13.0", layout="wide")
 st.title("📊 PI Planning Q2 2026 - Éditeur Excel & Gantt Optimisé")
 
 # ═══════════════════════════════════════════════════════════
@@ -252,7 +252,6 @@ with tab1:
         if not st.session_state.selected_projects:
             st.session_state.selected_projects = all_projects
         else:
-            # Garder seulement les valeurs qui existent encore
             st.session_state.selected_projects = [p for p in st.session_state.selected_projects if p in all_projects]
             if not st.session_state.selected_projects:
                 st.session_state.selected_projects = all_projects
@@ -300,29 +299,76 @@ with tab1:
             st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
-        st.markdown("### 📝 Tableau")
+        st.markdown("### 📝 Tableau Éditable (500 lignes)")
 
-        df_view = df_filtered.copy().sort_values('Start_Date')
-        df_view["Début"] = df_view["Start_Date"].apply(format_with_day)
-        df_view["Fin"] = df_view["End_Date"].apply(format_with_day)
-        df_display = df_view.drop(columns=["Start_Date", "End_Date"])
+        # NOUVELLE MÉTHODE : On travaille directement avec les colonnes texte sans conversion
+        # Créer une copie pour l'affichage sans les colonnes Start_Date et End_Date
+        df_edit = st.session_state.df_planning.copy()
 
-        edited_df = st.data_editor(df_display, num_rows="dynamic", use_container_width=True, height=400, key="data_editor")
+        # S'assurer que toutes les colonnes nécessaires existent
+        required_columns = ["Projet", "Jira", "Phase", "Tâche", "Équipe", "Début", "Fin"]
+        for col in required_columns:
+            if col not in df_edit.columns:
+                df_edit[col] = ""
 
-        col1, col2, col3, col4 = st.columns([2, 2, 2, 4])
+        # Garder l'ordre des colonnes
+        df_edit = df_edit[required_columns]
+
+        # Éditer le tableau avec 500 lignes
+        edited_df = st.data_editor(
+            df_edit, 
+            num_rows="dynamic", 
+            use_container_width=True, 
+            height=500,
+            key="data_editor",
+            column_config={
+                "Projet": st.column_config.TextColumn("Projet", width="large"),
+                "Jira": st.column_config.TextColumn("Jira", width="small"),
+                "Phase": st.column_config.TextColumn("Phase", width="small"),
+                "Tâche": st.column_config.TextColumn("Tâche", width="medium"),
+                "Équipe": st.column_config.TextColumn("Équipe", width="small"),
+                "Début": st.column_config.TextColumn("Début", width="medium", help="Format: JJ/MM/AAAA ou JJ/MM/AAAA HH:MM"),
+                "Fin": st.column_config.TextColumn("Fin", width="medium", help="Format: JJ/MM/AAAA ou JJ/MM/AAAA HH:MM"),
+            }
+        )
+
+        col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 4])
         with col1:
             if st.button("💾 Enregistrer", type="primary", use_container_width=True):
+                # CORRECTION: Sauvegarder directement edited_df sans transformation
                 st.session_state.df_planning = edited_df.copy()
                 st.session_state.data_hash = None
                 st.success("✅ Sauvegardé !")
                 st.rerun()
+
         with col2:
-            tsv_data = dataframe_to_tsv(df_display)
+            # Préparer les données pour l'export (avec les jours de la semaine)
+            df_export = df_filtered.copy().sort_values('Start_Date')
+            df_export["Début"] = df_export["Start_Date"].apply(format_with_day)
+            df_export["Fin"] = df_export["End_Date"].apply(format_with_day)
+            df_export_display = df_export[["Projet", "Jira", "Phase", "Tâche", "Équipe", "Début", "Fin"]]
+            tsv_data = dataframe_to_tsv(df_export_display)
             st.download_button("📋 Copier (Excel)", tsv_data, "planning.tsv", "text/tab-separated-values", use_container_width=True)
+
         with col3:
-            csv = df_display.to_csv(index=False, encoding='utf-8-sig')
+            csv = df_export_display.to_csv(index=False, encoding='utf-8-sig')
             st.download_button("📥 CSV", csv, f"planning_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", use_container_width=True)
+
         with col4:
+            if st.button("🗑️ Supprimer tout", use_container_width=True, type="secondary"):
+                if st.session_state.get('confirm_delete', False):
+                    # Créer un DataFrame vide avec les colonnes requises
+                    st.session_state.df_planning = pd.DataFrame(columns=["Projet", "Jira", "Phase", "Tâche", "Équipe", "Début", "Fin"])
+                    st.session_state.data_hash = None
+                    st.session_state.confirm_delete = False
+                    st.success("🗑️ Toutes les données ont été supprimées !")
+                    st.rerun()
+                else:
+                    st.session_state.confirm_delete = True
+                    st.warning("⚠️ Cliquez à nouveau pour confirmer la suppression")
+                    st.rerun()
+
+        with col5:
             if st.button("🔄 Réinitialiser", use_container_width=True):
                 st.session_state.df_planning = pd.DataFrame(DEFAULT_DATA)
                 st.session_state.data_hash = None
@@ -330,7 +376,12 @@ with tab1:
                 st.session_state.selected_teams = []
                 st.session_state.selected_phases = []
                 st.session_state.selected_tasks = []
+                st.session_state.confirm_delete = False
                 st.rerun()
+
+        # Afficher un message si la confirmation de suppression est active
+        if st.session_state.get('confirm_delete', False):
+            st.error("⚠️ ATTENTION : Cliquez à nouveau sur 'Supprimer tout' pour confirmer la suppression définitive de toutes les données")
 
 with tab2:
     st.subheader("📅 Vue Temporelle")
@@ -373,4 +424,4 @@ with tab2:
             st.info("Aucune tâche la semaine prochaine")
 
 st.divider()
-st.caption(f"PI Planning Tool v12.2 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"PI Planning Tool v13.0 | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
